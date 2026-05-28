@@ -12,12 +12,10 @@ Setup instructions, full API reference, and troubleshooting for all TaskNotes ac
 
 | Method | Requires | Body content | Best for |
 |---|---|---|---|
-| MCP server | Obsidian running + toggles on | Frontmatter only (see note) | Primary - full task ops |
-| HTTP API | Obsidian running + API toggle on | Frontmatter only (see note) | Fallback or scripting |
-| Filesystem | Any filesystem tool | Full file including body | Body reads; Obsidian closed |
+| MCP server | Obsidian running + toggles on | Yes (fixed in v4.8.0) | Primary - full task ops including body |
+| HTTP API | Obsidian running + API toggle on | Yes (fixed in v4.8.0) | Fallback or scripting |
+| Filesystem | Any filesystem tool | Full file including body | Obsidian closed; schema diagnostic |
 | `mtn` CLI | Node.js + npm | Full file including body | Headless; scripting |
-
-**Body content note:** Both MCP and HTTP API read from Obsidian's metadata cache, which only indexes frontmatter. Task body content (checklists, notes, acceptance criteria) is not returned by any GET operation. Body reads require a direct file read. This is a known upstream gap (GitHub issue #1858).
 
 ---
 
@@ -249,9 +247,9 @@ Plugin updates can reset settings. After any TaskNotes update, re-enable both to
 - Confirm `npx` is available in the environment (requires Node.js)
 - Try running `npx -y mcp-remote http://localhost:8080/mcp` in a terminal to see the raw error
 
-### Task body content not available via MCP or API
+### Task body content not returned (pre-v4.8.0 only)
 
-Both MCP and HTTP API only return frontmatter fields (metadata cache limitation). To read body content - checklists, notes, acceptance criteria - read the task `.md` file directly using any filesystem tool. This is a known upstream gap (GitHub issue #1858 on callumalpass/tasknotes).
+If you are on TaskNotes v4.7.x or earlier, MCP and HTTP API GET operations only return frontmatter fields - body content requires a direct filesystem file read. Upgrade to v4.8.0 or later to resolve this. The fix was tracked in GitHub issue #1858 and shipped in v4.8.0.
 
 ---
 

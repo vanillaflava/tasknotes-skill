@@ -32,16 +32,17 @@ Capabilities vary by environment. The skill probes what is available at the star
 
 **Filesystem access alone** (minimum - works even when Obsidian is closed):
 - Task CRUD, file-based querying, schema diagnostics
-- Full body and checklist reads (filesystem is the only path that can return body content)
+- Full body and checklist reads
 - Recurring task creation (sets the RRULE and first scheduled date)
 
 **HTTP API or MCP available** (Obsidian running, integration toggles enabled - adds):
 - Reliable filtered queries without scanning all files
+- Full task body and checklist reads via the `details` field (fixed in v4.8.0)
 - Time tracking and Pomodoro sessions
 - Calendar event reads
 - Per-instance recurring task completion
 
-**Body content gap:** Both MCP and HTTP API return frontmatter only - this is an upstream limitation of the plugin's metadata cache (GitHub issue [#1858](https://github.com/callumalpass/tasknotes/issues/1858)). Body content always requires a direct filesystem read.
+**Body content:** MCP and HTTP API return the full task body in the `details` field as of v4.8.0. On earlier versions, body content required a direct filesystem read - upgrade if you're affected (GitHub issue [#1858](https://github.com/callumalpass/tasknotes/issues/1858)).
 
 **Not covered regardless of setup:**
 

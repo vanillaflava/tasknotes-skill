@@ -2,7 +2,7 @@
 name: tasknotes
 description: "Manage tasks in an Obsidian TaskNotes vault. Use for creating, reading, updating, or completing tasks; checking what is open or in progress; adding items to a list; marking tasks done or in progress; updating task status or priority; investigating why a task is missing from a view or board; troubleshooting TaskNotes MCP or API connection issues; setting up or configuring TaskNotes; or running a schema diagnostic on task files. Routes automatically to the best available access method: MCP server, HTTP API, or direct file access. Bundled help at references/tasknotes-help.md."
 metadata:
-  version: "4.0"
+  version: "4.1"
 ---
 
 # TaskNotes
@@ -35,18 +35,12 @@ Try the user-supplied port before giving up. If still unreachable, HTTP API is u
 
 Check whether any loaded tool can read and write `.md` files. Do not assume a specific tool name - any filesystem capability qualifies.
 
-### 4. Does this operation need body content?
-
-Task body content (checklists, acceptance criteria, notes below the frontmatter) is not returned by the MCP or HTTP API - both read from Obsidian's metadata cache which only indexes frontmatter. Body reads and writes always require filesystem access. Note whether this operation involves body content.
-
 ### Routing
 
 | MCP | HTTP API | Filesystem | Route |
 |---|---|---|---|
-| Yes | - | Yes | MCP for all frontmatter ops; filesystem for body reads/writes |
-| Yes | - | No | MCP for frontmatter; flag body limitation to user |
-| No | Yes | Yes | HTTP API for frontmatter; filesystem for body reads/writes |
-| No | Yes | No | HTTP API for frontmatter; flag body limitation to user |
+| Yes | - | - | MCP for all ops including body reads (fixed in v4.8.0) |
+| No | Yes | - | HTTP API for all frontmatter and body ops |
 | No | No | Yes | Filesystem path - all workflows below |
 | No | No | No | Inform user what is missing; link `references/tasknotes-help.md` for setup |
 
@@ -59,7 +53,7 @@ Task body content (checklists, acceptance criteria, notes below the frontmatter)
 | Mark done | `tasknotes_update_task` | `PUT /api/tasks/:id` | Workflow 4 |
 | Query / filter tasks | `tasknotes_query_tasks` | `POST /api/tasks/query` | Workflow 5 |
 | Read task frontmatter | `tasknotes_get_task` | `GET /api/tasks/:id` | Read .md file |
-| **Read task body / checklist** | **✗ use filesystem** | **✗ use filesystem** | **Read .md file** |
+| Read task body / checklist | `tasknotes_get_task` (details field) | `GET /api/tasks/:id` | Read .md file |
 | Write task body | `tasknotes_update_task` (details field) | `PUT /api/tasks/:id` | Write .md file |
 | Schema diagnostic | ✗ → Workflow 9 | ✗ → Workflow 9 | Workflow 9 |
 | Time tracking | `tasknotes_*_time_tracking` | `/api/tasks/:id/time/*` | Manual (complex) |
@@ -88,8 +82,6 @@ Run `tool_search("tasknotes query")` if the query tools are not yet loaded.
 - Always include `tags: ["task"]` - without it the task is invisible to all TaskNotes views
 - Task paths in MCP calls are vault-relative (e.g. `Agent Access/TaskNotes/Tasks/filename.md`)
 
-**Body content gap:** `tasknotes_get_task` and `tasknotes_query_tasks` do not return the task body - only frontmatter fields. If the operation requires reading checklist items, subtasks, or body notes, fall back to a filesystem read of the task file. See upstream issue #1858. If filesystem is not available, inform the user of this limitation.
-
 **Schema diagnostic:** Not available via MCP. If the user asks for a schema health check, switch to the Filesystem path → Workflow 9.
 
 ---
@@ -115,8 +107,6 @@ Use when the HTTP API is available but MCP is not.
 
 The `{id}` parameter is the URL-encoded vault-relative file path (e.g. `Agent%20Access%2FTaskNotes%2FTasks%2Ftask.md`).
 
-**Body content gap:** Same as MCP - GET endpoints return frontmatter only. Body reads require filesystem access.
-
 **Schema diagnostic:** Not available via HTTP API. Switch to Filesystem path → Workflow 9.
 
 **Full endpoint reference:** `references/tasknotes-help.md`
@@ -125,7 +115,7 @@ The `{id}` parameter is the URL-encoded vault-relative file path (e.g. `Agent%20
 
 ## Path: Filesystem
 
-Used when MCP and HTTP API are both unavailable, or when body content is needed regardless of which primary path is active.
+Used when MCP and HTTP API are both unavailable, or when the filesystem is the only available surface.
 
 All workflows below operate by reading and writing `.md` task files directly.
 
@@ -230,8 +220,6 @@ Shape of the answer. Open questions explicitly listed.
 - [ ] Another checkable item
 ```
 
-**Body reads via filesystem:** Even when using the MCP or HTTP API for frontmatter operations, body content (checklists, notes) requires a direct file read. Read the task file at `tasks_folder/filename.md` to get the full body.
-
 ---
 
 ### Organisation: Projects, Contexts, Tags
@@ -313,7 +301,7 @@ Rule: inline checklists for steps within one task; separate files for work with 
 
 Search `tasks_folder` for files by project wikilink, status, or keyword. Always read each candidate file in full before acting on it.
 
-To read body content: read the file directly - frontmatter-only tools (MCP/API) cannot return it.
+When using MCP or HTTP API, task body content (checklists, notes) is returned in the `details` field - no separate file read needed (fixed in v4.8.0).
 
 #### 3. Update a task
 
@@ -438,7 +426,5 @@ Files in cloud-synced vaults may be zero-byte placeholders when not locally down
 - Access event-driven archiving behavior (plugin-only at runtime)
 
 **Environment-dependent capabilities:** Time tracking, Pomodoro, calendar events, and per-instance recurring task completion are available via MCP or HTTP API when those surfaces are present - but not via filesystem writes alone. What the skill can do depends on what the environment provides. See the surface lookup table in Step 0.
-
-**Body content:** MCP and HTTP API return frontmatter only (upstream limitation, GitHub issue #1858). Task body content always requires a direct filesystem file read regardless of which primary path is active.
 
 If a request cannot be fulfilled by any available path, decline and explain. Point the user to `references/tasknotes-help.md` for setup guidance.
