@@ -31,7 +31,7 @@ Note: named `default_tags` rather than `tags` to avoid Obsidian treating this co
 
 **contexts** - Optional semantic sub-domain strings. Maps a domain label to a context string written into the task's `contexts:` frontmatter field. Used to filter within a project's Bases views. Values accumulate in the vault and become available in the TaskNotes GUI `@` autosuggest as the task base grows. Full reference: https://tasknotes.dev/core-concepts/
 
-**tags** - The `task` tag is the only required tag. Configure which tag identifies tasks in Settings -> General -> Task Tag. Full reference: https://tasknotes.dev/settings/task-properties/
+**tags** - The `task` tag is the only required tag. Configure which tag identifies tasks in Settings -> General -> Task Tag. Multi-word tags are normalized to hyphens by the plugin (e.g. `in progress` -> `in-progress`, v4.9.2) for Obsidian tag compatibility. Full reference: https://tasknotes.dev/settings/task-properties/
 
 ---
 
