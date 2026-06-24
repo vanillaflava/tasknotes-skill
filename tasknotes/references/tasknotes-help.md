@@ -79,6 +79,12 @@ Update the port in your agent config to match.
 
 ---
 
+## Network binding and security
+
+The HTTP API and MCP server bind to loopback only (`127.0.0.1`) - they are not reachable from other machines, and there is no remote-bind option. Since v4.9.0, browser CORS is also restricted to loopback origins. For remote access, run your own local tunnel/forwarder. Authentication is optional and covered in the endpoint reference below.
+
+---
+
 ## Default folder locations and filesystem scope
 
 **Where TaskNotes creates its folders by default:** The plugin creates `TaskNotes/Tasks/` and `TaskNotes/Views/` directly under the Obsidian vault root - not inside any subfolder.
@@ -154,6 +160,8 @@ Full docs: https://tasknotes.dev/HTTP_API/
 
 **`:id` format:** URL-encoded vault-relative path. Example: `Agent%20Access%2FTaskNotes%2FTasks%2Fmy-task.md`
 
+**Partial updates:** `PUT /api/tasks/:id` accepts a partial payload - only the fields you send change. Tag handling in partial updates is correct as of v4.9.1 (earlier versions could rewrite native tags with `#` prefixes or duplicate the task tag).
+
 **Query body format:**
 ```json
 {
@@ -168,6 +176,10 @@ Full docs: https://tasknotes.dev/HTTP_API/
   "sortDirection": "asc"
 }
 ```
+
+**MCP note:** the `tasknotes_query_tasks` MCP tool takes these fields **flattened to top-level arguments** (`conjunction`, `children`, optional `sortKey` / `sortDirection` / `groupKey`) - WITHOUT the outer `{ "type": "group", "id": "root", ... }` wrapper shown above. Passing the wrapper to the MCP tool fails with a `conjunction`/`children` validation error. See SKILL.md "Path: MCP".
+
+**Valid filter operators:** `is`, `is-not`, `contains`, `does-not-contain`, `is-before`, `is-after`, `is-on-or-before`, `is-on-or-after`, `is-empty`, `is-not-empty`, `is-checked`, `is-not-checked`, `is-greater-than`, `is-less-than`, `is-greater-than-or-equal`, `is-less-than-or-equal`. The `value` field is omitted for the empty/checked operators. User-defined fields use `property: "user:<fieldId>"`.
 
 **Create task body fields:** `title` (required), `details`, `status`, `priority`, `due`, `scheduled`, `tags`, `contexts`, `projects`, `recurrence`, `timeEstimate`
 

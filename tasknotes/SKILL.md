@@ -2,7 +2,7 @@
 name: tasknotes
 description: "Manage tasks in an Obsidian TaskNotes vault. Use for creating, reading, updating, or completing tasks; checking what is open or in progress; adding items to a list; marking tasks done or in progress; updating task status or priority; investigating why a task is missing from a view or board; troubleshooting TaskNotes MCP or API connection issues; setting up or configuring TaskNotes; or running a schema diagnostic on task files. Routes automatically to the best available access method: MCP server, HTTP API, or direct file access. Bundled help at references/tasknotes-help.md."
 metadata:
-  version: "4.1"
+  version: "4.2"
 ---
 
 # TaskNotes
@@ -55,6 +55,7 @@ Check whether any loaded tool can read and write `.md` files. Do not assume a sp
 | Read task frontmatter | `tasknotes_get_task` | `GET /api/tasks/:id` | Read .md file |
 | Read task body / checklist | `tasknotes_get_task` (details field) | `GET /api/tasks/:id` | Read .md file |
 | Write task body | `tasknotes_update_task` (details field) | `PUT /api/tasks/:id` | Write .md file |
+| Complete recurring instance | `tasknotes_complete_recurring_instance` | `POST /api/tasks/:id/complete-instance` | Not supported (GUI only) |
 | Schema diagnostic | ✗ → Workflow 9 | ✗ → Workflow 9 | Workflow 9 |
 | Time tracking | `tasknotes_*_time_tracking` | `/api/tasks/:id/time/*` | Manual (complex) |
 | Pomodoro | `tasknotes_*_pomodoro` | `/api/pomodoro/*` | Not supported |
@@ -64,17 +65,41 @@ Check whether any loaded tool can read and write `.md` files. Do not assume a sp
 
 ## Path: MCP
 
-The `tasknotes:` MCP tools are self-describing. When MCP is available, use the tools directly - no workflow duplication is needed here.
+The `tasknotes:` MCP tools are mostly self-describing - call them directly. Two things agents reliably get wrong are NOT obvious from the tool list and are pinned below: the `query_tasks` argument shape, and per-instance recurring completion.
 
 **Key tools:**
 - `tasknotes_create_task` - create a task with frontmatter fields
 - `tasknotes_update_task` - update frontmatter fields (including `status`, `priority`, `projects`, `details`)
-- `tasknotes_query_tasks` - filter by project, status, priority, tags, dates
-- `tasknotes_get_task` - read a single task's frontmatter by file path
+- `tasknotes_query_tasks` - filter tasks with AND/OR conditions (arg shape below)
+- `tasknotes_list_tasks` - unfiltered list with pagination (`limit`/`offset`); prefer `query_tasks` when filtering
+- `tasknotes_get_task` - read a single task (frontmatter + `details` body) by file path
 - `tasknotes_toggle_status` - cycle status through the configured workflow
 - `tasknotes_get_filter_options` - list available statuses, priorities, projects, contexts
+- `tasknotes_complete_recurring_instance` / `tasknotes_materialize_occurrence` - recurring tasks (see below)
 
-Run `tool_search("tasknotes query")` if the query tools are not yet loaded.
+In deferred-tools environments, load a tool's schema before guessing its args: `tool_search("select:tasknotes_query_tasks")`.
+
+**Querying with `tasknotes_query_tasks` - flattened arg shape.** The MCP tool takes the filter group **flattened to top-level arguments**, NOT the wrapped `{"type":"group", ...}` body documented for the HTTP API in `references/tasknotes-help.md`. Passing the HTTP wrapper fails with a `conjunction`/`children` validation error.
+
+- Required top-level: `conjunction` (`"and"` | `"or"`) and `children` (array). Optional: `sortKey`, `sortDirection` (`"asc"` | `"desc"`), `groupKey`.
+- Each child is a condition `{ "type": "condition", "id": "<any stable string>", "property": "<field>", "operator": "<op>", "value": <value> }` - the key is `property`, NOT `field`. Nested groups are allowed as children.
+- Common operators: `is`, `is-not`, `contains`, `does-not-contain`, `is-empty`, `is-not-empty` (hyphenated - `is-not`, not `is not`). Full list in `references/tasknotes-help.md`.
+
+```json
+{
+  "conjunction": "and",
+  "children": [
+    { "type": "condition", "id": "c1", "property": "projects", "operator": "contains", "value": "[[Project - Home]]" },
+    { "type": "condition", "id": "c2", "property": "status", "operator": "is-not", "value": "done" }
+  ],
+  "sortKey": "status",
+  "sortDirection": "asc"
+}
+```
+
+`tasknotes_get_task` and `tasknotes_update_task` take **`id`** (the vault-relative file path), not `taskId`.
+
+**Recurring tasks (MCP).** To complete a single occurrence without closing the series, call `tasknotes_complete_recurring_instance` (`id` = task file path; optional `date` = `YYYY-MM-DD`, defaults to today). To create a concrete occurrence note for one date, call `tasknotes_materialize_occurrence` (`id`, `date`). Never set `status: done` on the recurring task itself - that closes the whole series. See Workflow 10.
 
 **Conventions that apply regardless of path:**
 - `projects:` must be a wikilink array - `["[[Domain - Home]]"]` not a plain string; plain strings are silently broken and the task will not appear on any Kanban
@@ -118,6 +143,8 @@ The `{id}` parameter is the URL-encoded vault-relative file path (e.g. `Agent%20
 Used when MCP and HTTP API are both unavailable, or when the filesystem is the only available surface.
 
 All workflows below operate by reading and writing `.md` task files directly.
+
+**Note - direct edits while Obsidian is running (plugin v4.9.0+):** the plugin now detects direct file edits to lifecycle fields (`status`, `completedDate`, scheduled/due dates) and runs the matching side-effects - Google Calendar sync and auto-archive. Previously these were silent. This only applies when Obsidian is open while you edit files directly; with Obsidian closed there are no side-effects.
 
 ---
 
@@ -371,7 +398,7 @@ Report grouped by failure type. Offer to fix each; confirm before writing. Updat
 
 #### 10. Create a recurring task
 
-The skill writes the recurrence pattern; the plugin manages completed instances at runtime. Never mark a recurring task `done` via the agent - it closes the entire task permanently.
+The skill writes the recurrence pattern; the plugin manages completed instances at runtime. Never close a recurring task by writing `status: done` (filesystem) or via `update_task` - that ends the entire series permanently. **For per-instance completion, when MCP or the HTTP API is available, use `tasknotes_complete_recurring_instance` (see Path: MCP) or `POST /api/tasks/:id/complete-instance`** - this completes one occurrence without closing the series. On a filesystem-only surface (Obsidian closed), per-instance completion is not possible; completions go through the plugin GUI.
 
 1. Confirm recurrence pattern, anchor (`scheduled` or `completion`), and first occurrence date
 2. Build RRULE: `DTSTART:YYYYMMDD;FREQ=...`
@@ -384,7 +411,7 @@ The skill writes the recurrence pattern; the plugin manages completed instances 
    ```
 
 3. Write the task file with `recurrence`, `recurrence_anchor`, and `scheduled` set to the first occurrence
-4. Remind the user: subsequent completions go through the plugin GUI
+4. For later per-instance completion: use `tasknotes_complete_recurring_instance` (MCP) or `POST /api/tasks/:id/complete-instance` (HTTP) when available; on a filesystem-only surface, completions go through the plugin GUI
 
 ---
 
