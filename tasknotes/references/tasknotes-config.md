@@ -78,6 +78,7 @@ All dates use `YYYY-MM-DD`. No timestamps, no timezone offsets. `completedDate` 
 | `recurrence` | text | optional | RFC 5545 RRULE with embedded DTSTART. See Workflow 10 in the skill |
 | `recurrence_anchor` | text | optional | `scheduled` or `completion` - pair with `recurrence` |
 | `blockedBy` | list | optional | List of dependency objects; see structure below |
+| `attachments` | list | optional | Ordered list of vault links to attached files. Preserve the existing list on edit; do not invent entries |
 
 **`blockedBy` structure:**
 

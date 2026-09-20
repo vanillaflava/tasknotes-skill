@@ -12,8 +12,8 @@ Setup instructions, full API reference, and troubleshooting for all TaskNotes ac
 
 | Method | Requires | Body content | Best for |
 |---|---|---|---|
-| MCP server | Obsidian running + toggles on | Yes (fixed in v4.8.0) | Primary - full task ops including body |
-| HTTP API | Obsidian running + API toggle on | Yes (fixed in v4.8.0) | Fallback or scripting |
+| MCP server | Obsidian running + toggles on + API token | Yes (fixed in v4.8.0) | Primary - full task ops including body |
+| HTTP API | Obsidian running + API toggle on + API token | Yes (fixed in v4.8.0) | Fallback or scripting |
 | Filesystem | Any filesystem tool | Full file including body | Obsidian closed; schema diagnostic |
 | `mtn` CLI | Node.js + npm | Full file including body | Headless; scripting |
 
@@ -28,15 +28,28 @@ Both run inside the TaskNotes Obsidian plugin (v4.5.1+). They are only available
 2. Enable the **HTTP API** toggle
 3. Enable the **MCP Server** toggle
 4. Note the port (default: 8080)
-5. Restart Obsidian
+5. Copy the value of **API authentication token** in that same HTTP API section - every request needs it
+6. Restart Obsidian
 
-**Verify:** Open `http://localhost:8080/api/health` in a browser. Should return `{"status":"ok","vault":"...","version":"..."}`.
+**Authentication is required (plugin v4.13.0+).** Every HTTP API and MCP request must carry `Authorization: Bearer <token>`. An empty token field no longer means "no authentication": the plugin generates a token instead, and rejects every request that does not present it. A setup that previously connected without a token stops working on upgrade until the token reaches the client config.
+
+**Getting the token.** Settings → TaskNotes → Integrations → HTTP API → **API authentication token**. The plugin's own instruction for generating one: enable HTTP API, leave that field empty, restart Obsidian, then copy the generated value into your client's bearer authentication settings. It is a TaskNotes token, not your AI provider's API key. Update every client whenever it changes.
+
+Read it from the settings pane, never out of the plugin's `data.json` - that file is plugin-owned state, and the skill never reads or writes it.
+
+**Verify:**
+
+```bash
+curl -H "Authorization: Bearer <token>" http://localhost:8080/api/health
+```
+
+Expect `{"status":"ok","vault":"...","version":"..."}`. Opening that URL in a browser returns `401 {"success":false,"error":"Authentication required"}` because a browser sends no token - that 401 means the server is running correctly, not that it is broken. No endpoint is exempt, `/api/health` included.
 
 ---
 
 ## Connecting an agent to the MCP server
 
-The MCP server exposes an SSE endpoint at `http://localhost:{port}/mcp`. How you connect depends on your agent platform.
+The MCP server is exposed at `http://localhost:{port}/mcp` over streamable HTTP. How you connect depends on your agent platform, but every platform must send `Authorization: Bearer <token>` (plugin v4.13.0+) - a client that cannot set a header cannot connect.
 
 ### Claude Desktop
 
@@ -50,24 +63,46 @@ Edit `claude_desktop_config.json`:
   "mcpServers": {
     "tasknotes": {
       "command": "npx",
-      "args": ["-y", "mcp-remote", "http://localhost:8080/mcp"]
+      "args": [
+        "-y", "mcp-remote", "http://localhost:8080/mcp",
+        "--header", "Authorization: Bearer <token>"
+      ]
     }
   }
 }
 ```
 
-Restart Claude Desktop after editing.
+**On Windows, use this form instead.** Claude Desktop does not escape spaces inside `args`, so the header above arrives mangled and the connection fails. Pass the value through the environment, with no space around the colon:
+
+```json
+{
+  "mcpServers": {
+    "tasknotes": {
+      "command": "npx",
+      "args": [
+        "-y", "mcp-remote", "http://localhost:8080/mcp",
+        "--header", "Authorization:${AUTH_HEADER}"
+      ],
+      "env": { "AUTH_HEADER": "Bearer <token>" }
+    }
+  }
+}
+```
+
+The environment form also keeps the token out of the process argument list, where other local users could read it. For stricter handling, `mcp-remote` accepts `--header-file <path>` and reads the header from that file instead, keeping the token out of the client config as well; the trade-off is one more file to place and protect.
+
+Quit and restart Claude Desktop fully after editing - the config is read only at startup.
 
 ### Other agent platforms
 
-MCP setup varies by platform. The transport is HTTP/SSE; point your agent at `http://localhost:{port}/mcp`.
+MCP setup varies by platform. The transport is streamable HTTP; point your agent at `http://localhost:{port}/mcp` and give it the bearer token.
 
 - **Claude Code:** https://docs.claude.ai/en/docs/claude-code/mcp
 - **Cursor:** https://docs.cursor.com/advanced/model-context-protocol
 - **Windsurf / Codex CLI / other agents:** check your platform's MCP or tool-server documentation
 - **Generic MCP spec:** https://modelcontextprotocol.io/
 
-All platforms that support MCP can connect using the same SSE URL. The `mcp-remote` npm package (used above for Claude Desktop) is a convenience wrapper; native SSE support does not need it.
+All platforms that support MCP can connect to the same URL, and all of them must send the bearer token. The `mcp-remote` npm package (used above for Claude Desktop) is a convenience wrapper for clients that cannot reach a remote MCP server directly; a client with native remote support sets the header in its own config instead. Cursor and Codex CLI share the Windows argument-escaping bug described above, so use the environment-variable form on Windows there too.
 
 ---
 
@@ -81,7 +116,7 @@ Update the port in your agent config to match.
 
 ## Network binding and security
 
-The HTTP API and MCP server bind to loopback only (`127.0.0.1`) - they are not reachable from other machines, and there is no remote-bind option. Since v4.9.0, browser CORS is also restricted to loopback origins. For remote access, run your own local tunnel/forwarder. Authentication is optional and covered in the endpoint reference below.
+The HTTP API and MCP server bind to loopback only (`127.0.0.1`) - they are not reachable from other machines, and there is no remote-bind option. Since v4.9.0, browser CORS is also restricted to loopback origins. For remote access, run your own local tunnel/forwarder. Since v4.13.0 authentication is mandatory on both listeners, so loopback binding is no longer the only thing between a local script and your vault; see the endpoint reference below.
 
 ---
 
@@ -128,7 +163,9 @@ The skill reads `tasknotes-config.md` to find the `tasks_folder` path for filesy
 
 Base URL: `http://localhost:{port}/api`
 
-Authentication: optional. If `apiAuthToken` is set in plugin settings, send `Authorization: Bearer {token}`. If empty, all requests are accepted.
+**Authentication: required (plugin v4.13.0+).** Send `Authorization: Bearer {token}` on every request, `/api/health` included. The token is at Settings → TaskNotes → Integrations → HTTP API → **API authentication token**; if that field is empty when the server starts, the plugin generates one and saves it there. Requests without it return `401 {"success":false,"error":"Authentication required"}`.
+
+Note: the upstream page linked below still described authentication as optional when this reference was last revised (2026-09-20). That was true up to 4.12.x. The behaviour above was measured against a running 4.13.2 listener.
 
 Full docs: https://tasknotes.dev/HTTP_API/
 
@@ -160,7 +197,7 @@ Full docs: https://tasknotes.dev/HTTP_API/
 
 **`:id` format:** URL-encoded vault-relative path. Example: `Agent%20Access%2FTaskNotes%2FTasks%2Fmy-task.md`
 
-**Partial updates:** `PUT /api/tasks/:id` accepts a partial payload - only the fields you send change. Tag handling in partial updates is correct as of v4.9.1 (earlier versions could rewrite native tags with `#` prefixes or duplicate the task tag).
+**Partial updates:** `PUT /api/tasks/:id` accepts a partial payload - only the fields you send change. Tag handling in partial updates is correct as of v4.9.1 (earlier versions could rewrite native tags with `#` prefixes or duplicate the task tag). Since v4.12.4, sending `{"contexts": []}` or `{"blockedBy": []}` clears those fields; earlier versions ignored an empty array, so there was no way to clear them over HTTP.
 
 **Query body format:**
 ```json
@@ -193,6 +230,8 @@ Full docs: https://tasknotes.dev/HTTP_API/
 | GET | `/api/tasks/:id/time` | Time summary and entries for a task |
 | GET | `/api/time/active` | All currently running sessions |
 | GET | `/api/time/summary` | Aggregate time summary |
+
+Since v4.13.2 the plugin also exposes start/stop time tracking for the current task note as Command Palette commands, usable with hotkeys or button plugins. That is a path for the user inside Obsidian, not an agent surface.
 
 ### Pomodoro
 
@@ -235,9 +274,23 @@ Webhook docs: https://tasknotes.dev/webhooks/
 
 1. Confirm Obsidian is running
 2. Confirm both toggles are enabled (HTTP API + MCP Server) in Settings → TaskNotes → Integrations
-3. Confirm port matches between plugin settings and agent config
-4. Check `http://localhost:8080/api/health` in a browser - if it returns JSON, the server is up but the agent connection is failing; if it returns nothing, the server is not running
-5. Restart both Obsidian and the agent
+3. Confirm the agent config carries `Authorization: Bearer <token>` and that it matches Settings → TaskNotes → Integrations → HTTP API → **API authentication token**
+4. Confirm port matches between plugin settings and agent config
+5. Check `curl -H "Authorization: Bearer <token>" http://localhost:8080/api/health`. `{"status":"ok",...}` means the server is up and the agent connection is at fault; `401` means the token is missing or wrong; no response at all means the server is not running
+6. Restart both Obsidian and the agent
+
+### `RegistrationRejectedError` / Dynamic Client Registration rejected (HTTP 404)
+
+The signature, as it appears in an MCP client log:
+
+```
+Received error (status unknown): Dynamic Client Registration rejected (HTTP 404): {"success":false,"error":"Not found"}
+Fatal error: RegistrationRejectedError: Dynamic Client Registration rejected (HTTP 404)
+```
+
+**This is a missing or wrong API token, not an OAuth problem.** TaskNotes answers an unauthenticated request with `401`. Clients built on `mcp-remote` read any `401` as "this server wants OAuth", begin OAuth discovery, and ask the server to register a client. TaskNotes has no such endpoint, so it answers `404` and the client exits with the error above. Anything in the log about OAuth callback ports, sign-in coordination, or one instance taking the sign-in over from another is downstream noise from the same cause.
+
+Fix: add the bearer token to the client config (see "Connecting an agent to the MCP server") and restart the client. This appears on upgrade to 4.13.0+ for any setup that previously connected without a token.
 
 ### Connection refused on port 8080
 
@@ -251,13 +304,19 @@ When Obsidian first starts the server, Windows may show a firewall prompt. Allow
 
 ### Toggles reset after update
 
-Plugin updates can reset settings. After any TaskNotes update, re-enable both toggles and restart Obsidian.
+Plugin updates can reset settings. After any TaskNotes update, re-enable both toggles and restart Obsidian. Upgrading to 4.13.0 or later also introduces the token requirement: read Settings → TaskNotes → Integrations → HTTP API → **API authentication token** and make sure the client config carries it. Changing that token later invalidates every client until each one is updated.
 
 ### `mcp-remote` errors
 
-- Confirm the health endpoint works in a browser first
+- Confirm the health endpoint answers an authenticated `curl` first (see above)
 - Confirm `npx` is available in the environment (requires Node.js)
-- Try running `npx -y mcp-remote http://localhost:8080/mcp` in a terminal to see the raw error
+- Reproduce in a terminal with the header attached. Without it you only re-trigger the 401 described above:
+
+  ```bash
+  AUTH_HEADER="Bearer <token>" npx -y mcp-remote http://localhost:8080/mcp --header 'Authorization:${AUTH_HEADER}'
+  ```
+
+  A healthy start logs `Using custom headers: Authorization`, then `Connected to remote server` and `Proxy established successfully`.
 
 ### Task body content not returned (pre-v4.8.0 only)
 
@@ -267,7 +326,7 @@ If you are on TaskNotes v4.7.x or earlier, MCP and HTTP API GET operations only 
 
 ## Filesystem access (Obsidian closed)
 
-When Obsidian is not running, all API access is unavailable. Task files are standard `.md` files with YAML frontmatter - any filesystem tool can read and write them directly.
+When Obsidian is not running, all API access is unavailable. A missing or wrong API token fails the same way from the agent's point of view, so rule that out before concluding Obsidian is closed. Task files are standard `.md` files with YAML frontmatter - any filesystem tool can read and write them directly.
 
 Default task folder location: `{vault_root}/TaskNotes/Tasks/`. If this folder has been moved into a narrower filesystem scope, see the **Default folder locations and filesystem scope** section above for where to find it and what to check in `tasknotes-config.md`.
 
