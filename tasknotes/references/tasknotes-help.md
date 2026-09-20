@@ -40,7 +40,7 @@ Read it from the settings pane, never out of the plugin's `data.json` - that fil
 **Verify:**
 
 ```bash
-curl -H "Authorization: Bearer <token>" http://localhost:8080/api/health
+curl -H "Authorization: Bearer <token>" http://127.0.0.1:8080/api/health
 ```
 
 Expect `{"status":"ok","vault":"...","version":"..."}`. Opening that URL in a browser returns `401 {"success":false,"error":"Authentication required"}` because a browser sends no token - that 401 means the server is running correctly, not that it is broken. No endpoint is exempt, `/api/health` included.
@@ -49,7 +49,9 @@ Expect `{"status":"ok","vault":"...","version":"..."}`. Opening that URL in a br
 
 ## Connecting an agent to the MCP server
 
-The MCP server is exposed at `http://localhost:{port}/mcp` over streamable HTTP. How you connect depends on your agent platform, but every platform must send `Authorization: Bearer <token>` (plugin v4.13.0+) - a client that cannot set a header cannot connect.
+The MCP server is exposed at `http://127.0.0.1:{port}/mcp` over streamable HTTP. How you connect depends on your agent platform, but every platform must send `Authorization: Bearer <token>` (plugin v4.13.0+) - a client that cannot set a header cannot connect.
+
+**Use `127.0.0.1`, not `localhost`.** The listener binds to the IPv4 loopback only, and nothing answers on `::1`. On many systems `localhost` resolves to `::1` first, so a client that does not fall back to IPv4 fails with a connection error that reads as "the server is not running". Node-based clients such as `mcp-remote` fall back automatically only from Node 18.18 / 20.0 onwards, where Happy Eyeballs is the default. Addressing the interface directly removes the question.
 
 ### Claude Desktop
 
@@ -64,7 +66,7 @@ Edit `claude_desktop_config.json`:
     "tasknotes": {
       "command": "npx",
       "args": [
-        "-y", "mcp-remote", "http://localhost:8080/mcp",
+        "-y", "mcp-remote", "http://127.0.0.1:8080/mcp",
         "--header", "Authorization: Bearer <token>"
       ]
     }
@@ -80,7 +82,7 @@ Edit `claude_desktop_config.json`:
     "tasknotes": {
       "command": "npx",
       "args": [
-        "-y", "mcp-remote", "http://localhost:8080/mcp",
+        "-y", "mcp-remote", "http://127.0.0.1:8080/mcp",
         "--header", "Authorization:${AUTH_HEADER}"
       ],
       "env": { "AUTH_HEADER": "Bearer <token>" }
@@ -95,7 +97,7 @@ Quit and restart Claude Desktop fully after editing - the config is read only at
 
 ### Other agent platforms
 
-MCP setup varies by platform. The transport is streamable HTTP; point your agent at `http://localhost:{port}/mcp` and give it the bearer token.
+MCP setup varies by platform. The transport is streamable HTTP; point your agent at `http://127.0.0.1:{port}/mcp` and give it the bearer token.
 
 - **Claude Code:** https://docs.claude.ai/en/docs/claude-code/mcp
 - **Cursor:** https://docs.cursor.com/advanced/model-context-protocol
@@ -161,7 +163,7 @@ The skill reads `tasknotes-config.md` to find the `tasks_folder` path for filesy
 
 ## Complete HTTP API endpoint reference
 
-Base URL: `http://localhost:{port}/api`
+Base URL: `http://127.0.0.1:{port}/api`
 
 **Authentication: required (plugin v4.13.0+).** Send `Authorization: Bearer {token}` on every request, `/api/health` included. The token is at Settings → TaskNotes → Integrations → HTTP API → **API authentication token**; if that field is empty when the server starts, the plugin generates one and saves it there. Requests without it return `401 {"success":false,"error":"Authentication required"}`.
 
@@ -276,7 +278,7 @@ Webhook docs: https://tasknotes.dev/webhooks/
 2. Confirm both toggles are enabled (HTTP API + MCP Server) in Settings → TaskNotes → Integrations
 3. Confirm the agent config carries `Authorization: Bearer <token>` and that it matches Settings → TaskNotes → Integrations → HTTP API → **API authentication token**
 4. Confirm port matches between plugin settings and agent config
-5. Check `curl -H "Authorization: Bearer <token>" http://localhost:8080/api/health`. `{"status":"ok",...}` means the server is up and the agent connection is at fault; `401` means the token is missing or wrong; no response at all means the server is not running
+5. Check `curl -H "Authorization: Bearer <token>" http://127.0.0.1:8080/api/health`. `{"status":"ok",...}` means the server is up and the agent connection is at fault; `401` means the token is missing or wrong; no response at all means the server is not running
 6. Restart both Obsidian and the agent
 
 ### `RegistrationRejectedError` / Dynamic Client Registration rejected (HTTP 404)
@@ -313,7 +315,7 @@ Plugin updates can reset settings. After any TaskNotes update, re-enable both to
 - Reproduce in a terminal with the header attached. Without it you only re-trigger the 401 described above:
 
   ```bash
-  AUTH_HEADER="Bearer <token>" npx -y mcp-remote http://localhost:8080/mcp --header 'Authorization:${AUTH_HEADER}'
+  AUTH_HEADER="Bearer <token>" npx -y mcp-remote http://127.0.0.1:8080/mcp --header 'Authorization:${AUTH_HEADER}'
   ```
 
   A healthy start logs `Using custom headers: Authorization`, then `Connected to remote server` and `Proxy established successfully`.

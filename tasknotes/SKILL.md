@@ -25,7 +25,7 @@ If they do not load, do not conclude the server is down. Since plugin v4.13.0 th
 
 ### 2. HTTP API available?
 
-Attempt `web_fetch("http://localhost:8080/api/health")`. Three outcomes, and they mean different things:
+Attempt `web_fetch("http://127.0.0.1:8080/api/health")`. Three outcomes, and they mean different things:
 
 | Response | Meaning |
 |---|---|
@@ -129,7 +129,7 @@ In deferred-tools environments, load a tool's schema before guessing its args: `
 
 Use when the HTTP API is available but MCP is not.
 
-**Base URL:** `http://localhost:{port}/api` (default port: 8080)
+**Base URL:** `http://127.0.0.1:{port}/api` (default port: 8080). Dial `127.0.0.1`, not `localhost` - the listener is IPv4-loopback only, and `localhost` resolves to `::1` first on many systems.
 
 **Every request needs `Authorization: Bearer <token>`** (plugin v4.13.0+), `/api/health` included - no endpoint is exempt. The token is at Settings → TaskNotes → Integrations → HTTP API → **API authentication token**. Without it every call returns `401 {"success":false,"error":"Authentication required"}`.
 

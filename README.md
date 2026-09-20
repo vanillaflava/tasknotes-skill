@@ -71,7 +71,7 @@ This skill has a hard dependency on [Obsidian](https://obsidian.md/) and the [Ta
 
 **Optional (unlocks MCP and HTTP API paths):**
 
-- **TaskNotes HTTP API:** enable in Settings → TaskNotes → Integrations → HTTP API. Adds reliable filtered queries, time tracking, Pomodoro, calendar events, and recurring task instance completion via REST calls to `localhost:8080`. As of plugin v4.13.0, requests must include a bearer token, read from Settings → TaskNotes → Integrations → HTTP API → **API authentication token** - see `references/tasknotes-help.md` for client configuration.
+- **TaskNotes HTTP API:** enable in Settings → TaskNotes → Integrations → HTTP API. Adds reliable filtered queries, time tracking, Pomodoro, calendar events, and recurring task instance completion via REST calls to `127.0.0.1:8080`. As of plugin v4.13.0, requests must include a bearer token, read from Settings → TaskNotes → Integrations → HTTP API → **API authentication token** - see `references/tasknotes-help.md` for client configuration.
 - **TaskNotes MCP server:** enable in Settings → TaskNotes → Integrations → MCP Server (requires HTTP API toggle also on). Exposes 25 tools directly to the agent - the preferred path when Obsidian is running. As of plugin v4.13.0, connections must include the same bearer token (a TaskNotes token, not your AI provider's API key; to generate one, enable the HTTP API with the token field empty and restart Obsidian). See `references/tasknotes-help.md` in the skill for setup config and multi-platform instructions.
 
 Both require Obsidian to be running. The skill falls back to filesystem access automatically if either is unavailable.
