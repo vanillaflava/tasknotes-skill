@@ -85,7 +85,9 @@ Edit `claude_desktop_config.json`:
 }
 ```
 
-The environment form also keeps the token out of the process argument list, where other local users could read it. Quit and restart Claude Desktop fully after editing - the config is read only at startup.
+The environment form also keeps the token out of the process argument list, where other local users could read it. For stricter handling, `mcp-remote` accepts `--header-file <path>` and reads the header from that file instead, keeping the token out of the client config as well; the trade-off is one more file to place and protect.
+
+Quit and restart Claude Desktop fully after editing - the config is read only at startup.
 
 ### Other agent platforms
 
