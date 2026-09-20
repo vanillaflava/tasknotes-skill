@@ -28,10 +28,14 @@ Both run inside the TaskNotes Obsidian plugin (v4.5.1+). They are only available
 2. Enable the **HTTP API** toggle
 3. Enable the **MCP Server** toggle
 4. Note the port (default: 8080)
-5. Copy the **API token** from the same Integrations pane - every request needs it
+5. Copy the value of **API authentication token** in that same HTTP API section - every request needs it
 6. Restart Obsidian
 
-**Authentication is required (plugin v4.13.0+).** Every HTTP API and MCP request must carry `Authorization: Bearer <token>`. If the token field is empty when the server starts, the plugin generates one and saves it - an empty field no longer means "no authentication". A setup that previously connected without a token stops working on upgrade until the token is added to the client config.
+**Authentication is required (plugin v4.13.0+).** Every HTTP API and MCP request must carry `Authorization: Bearer <token>`. An empty token field no longer means "no authentication": the plugin generates a token instead, and rejects every request that does not present it. A setup that previously connected without a token stops working on upgrade until the token reaches the client config.
+
+**Getting the token.** Settings → TaskNotes → Integrations → HTTP API → **API authentication token**. The plugin's own instruction for generating one: enable HTTP API, leave that field empty, restart Obsidian, then copy the generated value into your client's bearer authentication settings. It is a TaskNotes token, not your AI provider's API key. Update every client whenever it changes.
+
+Read it from the settings pane, never out of the plugin's `data.json` - that file is plugin-owned state, and the skill never reads or writes it.
 
 **Verify:**
 
@@ -159,7 +163,7 @@ The skill reads `tasknotes-config.md` to find the `tasks_folder` path for filesy
 
 Base URL: `http://localhost:{port}/api`
 
-**Authentication: required (plugin v4.13.0+).** Send `Authorization: Bearer {token}` on every request, `/api/health` included. The token is at Settings → TaskNotes → Integrations; if it is empty when the server starts, the plugin generates and saves one. Requests without it return `401 {"success":false,"error":"Authentication required"}`.
+**Authentication: required (plugin v4.13.0+).** Send `Authorization: Bearer {token}` on every request, `/api/health` included. The token is at Settings → TaskNotes → Integrations → HTTP API → **API authentication token**; if that field is empty when the server starts, the plugin generates one and saves it there. Requests without it return `401 {"success":false,"error":"Authentication required"}`.
 
 Note: the upstream page linked below still described authentication as optional when this reference was last revised (2026-09-20). That was true up to 4.12.x. The behaviour above was measured against a running 4.13.2 listener.
 
@@ -270,7 +274,7 @@ Webhook docs: https://tasknotes.dev/webhooks/
 
 1. Confirm Obsidian is running
 2. Confirm both toggles are enabled (HTTP API + MCP Server) in Settings → TaskNotes → Integrations
-3. Confirm the agent config carries `Authorization: Bearer <token>` and that the token matches the one in Integrations
+3. Confirm the agent config carries `Authorization: Bearer <token>` and that it matches Settings → TaskNotes → Integrations → HTTP API → **API authentication token**
 4. Confirm port matches between plugin settings and agent config
 5. Check `curl -H "Authorization: Bearer <token>" http://localhost:8080/api/health`. `{"status":"ok",...}` means the server is up and the agent connection is at fault; `401` means the token is missing or wrong; no response at all means the server is not running
 6. Restart both Obsidian and the agent
@@ -300,7 +304,7 @@ When Obsidian first starts the server, Windows may show a firewall prompt. Allow
 
 ### Toggles reset after update
 
-Plugin updates can reset settings. After any TaskNotes update, re-enable both toggles and restart Obsidian. Upgrading to 4.13.0 or later also introduces the token requirement: check Settings → TaskNotes → Integrations for the API token and make sure the client config carries it.
+Plugin updates can reset settings. After any TaskNotes update, re-enable both toggles and restart Obsidian. Upgrading to 4.13.0 or later also introduces the token requirement: read Settings → TaskNotes → Integrations → HTTP API → **API authentication token** and make sure the client config carries it. Changing that token later invalidates every client until each one is updated.
 
 ### `mcp-remote` errors
 

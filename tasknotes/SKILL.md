@@ -33,7 +33,7 @@ Attempt `web_fetch("http://localhost:8080/api/health")`. Three outcomes, and the
 | `401 {"success":false,"error":"Authentication required"}` | Server is running; the request carries no API token |
 | Connection refused or timeout | Server is not running on that port |
 
-**On a `401`:** the surface exists but is unusable until requests carry `Authorization: Bearer <token>` (plugin v4.13.0+). If you can set headers, read the token from Settings → TaskNotes → Integrations and retry. If you cannot, tell the user their client config is missing the token and point them at `references/tasknotes-help.md`. **Do not quietly fall through to the filesystem path.** That hides a one-line misconfiguration and silently costs the user filtered queries, time tracking, Pomodoro and per-instance recurring completion. Say what is missing.
+**On a `401`:** the surface exists but is unusable until requests carry `Authorization: Bearer <token>` (plugin v4.13.0+). If you can set headers, the token is at Settings → TaskNotes → Integrations → HTTP API → **API authentication token**; ask the user for it and retry. Never read it out of the plugin's `data.json`. If you cannot, tell the user their client config is missing the token and point them at `references/tasknotes-help.md`. **Do not quietly fall through to the filesystem path.** That hides a one-line misconfiguration and silently costs the user filtered queries, time tracking, Pomodoro and per-instance recurring completion. Say what is missing.
 
 **On connection refused or timeout,** ask the user:
 - *"What port is your TaskNotes HTTP API configured on? Check Settings → TaskNotes → Integrations → HTTP API."*
@@ -131,7 +131,7 @@ Use when the HTTP API is available but MCP is not.
 
 **Base URL:** `http://localhost:{port}/api` (default port: 8080)
 
-**Every request needs `Authorization: Bearer <token>`** (plugin v4.13.0+), `/api/health` included - no endpoint is exempt. The token is at Settings → TaskNotes → Integrations. Without it every call returns `401 {"success":false,"error":"Authentication required"}`.
+**Every request needs `Authorization: Bearer <token>`** (plugin v4.13.0+), `/api/health` included - no endpoint is exempt. The token is at Settings → TaskNotes → Integrations → HTTP API → **API authentication token**. Without it every call returns `401 {"success":false,"error":"Authentication required"}`.
 
 **Key endpoints:**
 
