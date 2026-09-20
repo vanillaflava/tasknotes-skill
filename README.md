@@ -35,7 +35,7 @@ Capabilities vary by environment. The skill probes what is available at the star
 - Full body and checklist reads
 - Recurring task creation (sets the RRULE and first scheduled date)
 
-**HTTP API or MCP available** (Obsidian running, integration toggles enabled - adds):
+**HTTP API or MCP available** (Obsidian running, integration toggles enabled, API token configured - adds):
 - Reliable filtered queries without scanning all files
 - Full task body and checklist reads via the `details` field (fixed in v4.8.0)
 - Time tracking and Pomodoro sessions
@@ -71,8 +71,8 @@ This skill has a hard dependency on [Obsidian](https://obsidian.md/) and the [Ta
 
 **Optional (unlocks MCP and HTTP API paths):**
 
-- **TaskNotes HTTP API:** enable in Settings → TaskNotes → Integrations → HTTP API. Adds reliable filtered queries, time tracking, Pomodoro, calendar events, and recurring task instance completion via REST calls to `localhost:8080`.
-- **TaskNotes MCP server:** enable in Settings → TaskNotes → Integrations → MCP Server (requires HTTP API toggle also on). Exposes 24 tools directly to the agent - the preferred path when Obsidian is running. See `references/tasknotes-help.md` in the skill for setup config and multi-platform instructions.
+- **TaskNotes HTTP API:** enable in Settings → TaskNotes → Integrations → HTTP API. Adds reliable filtered queries, time tracking, Pomodoro, calendar events, and recurring task instance completion via REST calls to `localhost:8080`. As of plugin v4.13.0, requests must include a bearer token found at Settings → TaskNotes → Integrations - see `references/tasknotes-help.md` for client configuration.
+- **TaskNotes MCP server:** enable in Settings → TaskNotes → Integrations → MCP Server (requires HTTP API toggle also on). Exposes 25 tools directly to the agent - the preferred path when Obsidian is running. As of plugin v4.13.0, connections must include a bearer token found at Settings → TaskNotes → Integrations. See `references/tasknotes-help.md` in the skill for setup config and multi-platform instructions.
 
 Both require Obsidian to be running. The skill falls back to filesystem access automatically if either is unavailable.
 

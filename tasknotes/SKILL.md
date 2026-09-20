@@ -2,7 +2,7 @@
 name: tasknotes
 description: "Manage tasks in an Obsidian TaskNotes vault. Use for creating, reading, updating, or completing tasks; checking what is open or in progress; adding items to a list; marking tasks done or in progress; updating task status or priority; investigating why a task is missing from a view or board; troubleshooting TaskNotes MCP or API connection issues; setting up or configuring TaskNotes; or running a schema diagnostic on task files. Routes automatically to the best available access method: MCP server, HTTP API, or direct file access. Bundled help at references/tasknotes-help.md."
 metadata:
-  version: "4.2"
+  version: "4.3"
 ---
 
 # TaskNotes
@@ -21,11 +21,21 @@ Multi-modal task management for Obsidian TaskNotes vaults. The skill probes the 
 
 Run `tool_search("tasknotes")`. If `tasknotes:` tools load successfully, the MCP server is live.
 
+If they do not load, do not conclude the server is down. Since plugin v4.13.0 the MCP endpoint requires a bearer token, and a client configured without one fails at connect time, so the tools never appear at all. Check 2 below - a `401` there means the server is running and the client is simply unauthenticated.
+
 ### 2. HTTP API available?
 
-Attempt `web_fetch("http://localhost:8080/api/health")`. If the response contains `{"status":"ok",...}`, the HTTP API is live on port 8080.
+Attempt `web_fetch("http://localhost:8080/api/health")`. Three outcomes, and they mean different things:
 
-If the request fails (connection refused or timeout), ask the user:
+| Response | Meaning |
+|---|---|
+| `{"status":"ok",...}` | HTTP API is live and the request is authenticated |
+| `401 {"success":false,"error":"Authentication required"}` | Server is running; the request carries no API token |
+| Connection refused or timeout | Server is not running on that port |
+
+**On a `401`:** the surface exists but is unusable until requests carry `Authorization: Bearer <token>` (plugin v4.13.0+). If you can set headers, read the token from Settings → TaskNotes → Integrations and retry. If you cannot, tell the user their client config is missing the token and point them at `references/tasknotes-help.md`. **Do not quietly fall through to the filesystem path.** That hides a one-line misconfiguration and silently costs the user filtered queries, time tracking, Pomodoro and per-instance recurring completion. Say what is missing.
+
+**On connection refused or timeout,** ask the user:
 - *"What port is your TaskNotes HTTP API configured on? Check Settings → TaskNotes → Integrations → HTTP API."*
 - *"Are both the HTTP API toggle and the MCP Server toggle enabled in those settings?"*
 
@@ -41,6 +51,8 @@ Check whether any loaded tool can read and write `.md` files. Do not assume a sp
 |---|---|---|---|
 | Yes | - | - | MCP for all ops including body reads (fixed in v4.8.0) |
 | No | Yes | - | HTTP API for all frontmatter and body ops |
+| No | 401 | Yes | Filesystem path, but tell the user the API token is missing first - the richer surface is one config line away |
+| No | 401 | No | Stop. The server is up and unauthenticated; only the user can add the token. Link `references/tasknotes-help.md` |
 | No | No | Yes | Filesystem path - all workflows below |
 | No | No | No | Inform user what is missing; link `references/tasknotes-help.md` for setup |
 
@@ -66,6 +78,8 @@ Check whether any loaded tool can read and write `.md` files. Do not assume a sp
 ## Path: MCP
 
 The `tasknotes:` MCP tools are mostly self-describing - call them directly. Two things agents reliably get wrong are NOT obvious from the tool list and are pinned below: the `query_tasks` argument shape, and per-instance recurring completion.
+
+**Connection:** the MCP client config must carry `Authorization: Bearer <token>` (plugin v4.13.0+). That is client configuration, not something the skill can set at call time - if the tools are absent, the fix belongs to the user and `references/tasknotes-help.md` has the config for each platform.
 
 **Key tools:**
 - `tasknotes_create_task` - create a task with frontmatter fields
@@ -117,6 +131,8 @@ Use when the HTTP API is available but MCP is not.
 
 **Base URL:** `http://localhost:{port}/api` (default port: 8080)
 
+**Every request needs `Authorization: Bearer <token>`** (plugin v4.13.0+), `/api/health` included - no endpoint is exempt. The token is at Settings → TaskNotes → Integrations. Without it every call returns `401 {"success":false,"error":"Authentication required"}`.
+
 **Key endpoints:**
 
 | Method | Endpoint | Use |
@@ -144,7 +160,7 @@ Used when MCP and HTTP API are both unavailable, or when the filesystem is the o
 
 All workflows below operate by reading and writing `.md` task files directly.
 
-**Note - direct edits while Obsidian is running (plugin v4.9.0+):** the plugin now detects direct file edits to lifecycle fields (`status`, `completedDate`, scheduled/due dates) and runs the matching side-effects - Google Calendar sync and auto-archive. Previously these were silent. This only applies when Obsidian is open while you edit files directly; with Obsidian closed there are no side-effects.
+**Note - direct edits while Obsidian is running (plugin v4.9.0+):** the plugin now detects direct file edits to lifecycle fields (`status`, `completedDate`, scheduled/due dates) and runs the matching side-effects - Google Calendar sync and auto-archive. Previously these were silent. Since v4.13.1 this extends to occurrence notes: a direct status edit on one updates the recurring parent's completion history and can create the next occurrence. This only applies when Obsidian is open while you edit files directly; with Obsidian closed there are no side-effects.
 
 ---
 
@@ -366,6 +382,8 @@ Never delete task files. Done tasks remain on disk; TaskNotes views filter by st
 
 Document custom fields in `tasknotes-config.md` under `domain_extensions:`. Include them when creating tasks in that domain.
 
+On MCP, configured TaskNotes user fields go through the `customProperties` argument of `tasknotes_create_task` and `tasknotes_update_task` (plugin v4.12.0+) rather than being written as raw frontmatter. Query them with `property: "user:<fieldId>"`.
+
 #### 8. Folder housekeeping
 
 **Step 1: Surface done tasks**
@@ -398,7 +416,7 @@ Report grouped by failure type. Offer to fix each; confirm before writing. Updat
 
 #### 10. Create a recurring task
 
-The skill writes the recurrence pattern; the plugin manages completed instances at runtime. Never close a recurring task by writing `status: done` (filesystem) or via `update_task` - that ends the entire series permanently. **For per-instance completion, when MCP or the HTTP API is available, use `tasknotes_complete_recurring_instance` (see Path: MCP) or `POST /api/tasks/:id/complete-instance`** - this completes one occurrence without closing the series. On a filesystem-only surface (Obsidian closed), per-instance completion is not possible; completions go through the plugin GUI.
+The skill writes the recurrence pattern; the plugin manages completed instances at runtime. Since v4.13.2, with "Create next after completion" enabled the plugin also creates the first available occurrence note, and occurrence notes link to their parent unambiguously across folders. Never close a recurring task by writing `status: done` (filesystem) or via `update_task` - that ends the entire series permanently. **For per-instance completion, when MCP or the HTTP API is available, use `tasknotes_complete_recurring_instance` (see Path: MCP) or `POST /api/tasks/:id/complete-instance`** - this completes one occurrence without closing the series. On a filesystem-only surface (Obsidian closed), per-instance completion is not possible; completions go through the plugin GUI.
 
 1. Confirm recurrence pattern, anchor (`scheduled` or `completion`), and first occurrence date
 2. Build RRULE: `DTSTART:YYYYMMDD;FREQ=...`
@@ -433,7 +451,7 @@ Full reference: https://tasknotes.dev/views/
 6. The project note must exist before a task links to it
 7. Read before editing - never overwrite from stale context
 8. Unknown projects require a config update first
-9. Never edit plugin `.json` config files - Obsidian overwrites them silently on close
+9. Never edit plugin `.json` config files - Obsidian overwrites them silently on close, and since plugin v4.13.0 TaskNotes refuses to start when it cannot safely read its `data.json`, preserving the file for recovery rather than loading defaults
 
 ---
 
