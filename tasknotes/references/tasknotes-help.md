@@ -161,6 +161,16 @@ The skill reads `tasknotes-config.md` to find the `tasks_folder` path for filesy
 
 ---
 
+## Task creation defaults (the stale-scheduled gotcha)
+
+The plugin fills omitted fields on new tasks from its task-creation defaults, and it **ships with Default scheduled date set to Today**. Every task created without an explicit scheduled date - through the GUI, natural-language input, note conversion, and the MCP/HTTP create path - is therefore scheduled for its creation day, and reads as stale (a past `scheduled` date) from the next day on.
+
+If you do not want tasks auto-scheduled, change it yourself in the plugin - the skill cannot: **Settings → TaskNotes → Task Properties → Default scheduled date → None**. The options are None, Today, Tomorrow, and Next Week, and the same control exists for Default due date (which ships as None). With Default scheduled date set to None, a new task stays unscheduled unless you give it a date, so `scheduled` becomes a deliberate "I plan to work on this that day" signal rather than noise. Treat `due` as the deadline (a past due is overdue) and `scheduled` as the planned work-day (a past scheduled date has only slipped).
+
+Reference: https://tasknotes.dev/settings/task-properties/
+
+---
+
 ## Complete HTTP API endpoint reference
 
 Base URL: `http://127.0.0.1:{port}/api`
@@ -267,6 +277,19 @@ Since v4.13.2 the plugin also exposes start/stop time tracking for the current t
 | GET | `/api/webhooks/deliveries` | Delivery history |
 
 Webhook docs: https://tasknotes.dev/webhooks/
+
+---
+
+## TaskNotes v5 (opt-in beta) - heads-up for agents
+
+TaskNotes 5.0 is in opt-in beta; 4.14.0 is the recommended stable release and this skill targets the 4.x line. When v5 ships stable, the agent-facing surfaces move in ways that will need a skill refresh:
+
+- **Auth token storage.** The HTTP API / MCP token moves out of `data.json` into Obsidian Secret Storage, per device. A synced device that starts v5 generates its own token, which must be copied into that device's client config.
+- **Settings reorganized.** The settings UI is rebuilt around Obsidian's native navigation, so the `Settings → TaskNotes → ...` paths in this guide may move.
+- **Metadata model (mdbase).** v5 introduces a new metadata model and a v4-to-v5 migration; existing Base files are not rewritten automatically.
+- **Removed:** the Statistics and Pomodoro-statistics dashboards (the Pomodoro timer, time tracking, stored history, and HTTP/MCP API are retained).
+
+Do not treat v5 behaviour as current for a 4.x vault. Migration guide: https://tasknotes.dev/migration-v4-to-v5/
 
 ---
 
