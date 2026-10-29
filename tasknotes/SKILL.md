@@ -2,7 +2,7 @@
 name: tasknotes
 description: "Manage tasks in an Obsidian TaskNotes vault. Use for creating, reading, updating, or completing tasks; checking what is open or in progress; adding items to a list; marking tasks done or in progress; updating task status or priority; investigating why a task is missing from a view or board; troubleshooting TaskNotes MCP or API connection issues; setting up or configuring TaskNotes; or running a schema diagnostic on task files. Routes automatically to the best available access method: MCP server, HTTP API, or direct file access. Bundled help at references/tasknotes-help.md."
 metadata:
-  version: "4.3"
+  version: "4.4"
 ---
 
 # TaskNotes
@@ -98,6 +98,7 @@ In deferred-tools environments, load a tool's schema before guessing its args: `
 - Required top-level: `conjunction` (`"and"` | `"or"`) and `children` (array). Optional: `sortKey`, `sortDirection` (`"asc"` | `"desc"`), `groupKey`.
 - Each child is a condition `{ "type": "condition", "id": "<any stable string>", "property": "<field>", "operator": "<op>", "value": <value> }` - the key is `property`, NOT `field`. Nested groups are allowed as children.
 - Common operators: `is`, `is-not`, `contains`, `does-not-contain`, `is-empty`, `is-not-empty` (hyphenated - `is-not`, not `is not`). Full list in `references/tasknotes-help.md`.
+- Since plugin v4.13.9 a query with an invalid `property`, an unknown operator, or an incomplete condition returns an **error**, not a silently empty result - so an empty result means "nothing matched", not "malformed filter". On older plugins the two were indistinguishable: if a query you expect to populate comes back empty on a plugin before v4.13.9, suspect the filter shape before concluding the task is missing. Custom fields accept either `user:<id>` or `user.<id>`.
 
 ```json
 {
@@ -201,8 +202,8 @@ scheduled: YYYY-MM-DD
 completedDate:
 projects:
   - "[[Project Note Title]]"
-dateCreated: YYYY-MM-DD
-dateModified: YYYY-MM-DD
+dateCreated: 2026-01-15T09:30:00+01:00
+dateModified: 2026-01-15T09:30:00+01:00
 tags:
   - task
 contexts:
@@ -219,6 +220,17 @@ Use `default_status`, `default_priority`, and `default_tags` from config. Field 
 **Leave empty until set:** `completedDate`.
 
 **Add only as needed:** `due: YYYY-MM-DD`, `timeEstimate: 30` (minutes).
+
+### Scheduled vs Due
+
+`scheduled` and `due` are not interchangeable, and the difference drives every date-based view:
+
+- **`due`** is the deadline - the day the task must be finished. A past `due` is *overdue*. Set it only when there is a real deadline.
+- **`scheduled`** is the day you plan to *work* on the task. A past `scheduled` date has only *slipped* - a plan that did not happen, not a missed deadline. Set it only when there is a genuine planned work-day.
+
+Do **not** default `scheduled` to the creation date. A task created "scheduled today" with no real intent to work on it today reads as stale the next day and clutters Today and Agenda views. When the user names neither a work-day nor a deadline, leave **both** empty - an unscheduled task is a valid, clean backlog state. Reach for `due` when there is a deadline, `scheduled` when there is a day you will actually pick it up, and often neither.
+
+**Plugin creation defaults.** When a task is created *through the plugin* - the GUI, natural-language input, note conversion, or the MCP/HTTP create path (not a raw filesystem write) - the plugin fills fields you omit from the vault's configured defaults. Depending on the user's settings this can include a **default project**, a default reminder, and a **default scheduled date**, and the plugin *ships* with the default scheduled date set to **Today**. So omitting `scheduled` does not reliably yield an unscheduled task (with the shipped default it lands scheduled for today), and omitting `projects` can silently attach the default project. Set the fields you mean explicitly, verify `projects` landed where intended, and treat an unscheduled task as a deliberate choice. The scheduled default is a per-user plugin setting the skill cannot change; `references/tasknotes-help.md` has the one-line fix.
 
 **Recurring tasks:**
 
@@ -238,7 +250,7 @@ blockedBy:
     reltype: "FINISHTOSTART"
 ```
 
-**Date format:** `YYYY-MM-DD` for all date fields. No timestamps.
+**Date formats:** `scheduled` and `due` are `YYYY-MM-DD` (date-only), or an ISO 8601 date-time when a specific time matters (a task scheduled for `09:00`, say). `dateCreated` and `dateModified` are full ISO 8601 date-times with a timezone offset - the plugin writes them like `2026-01-15T09:30:00.000+01:00` - so on the filesystem path set a matching timestamp, not a bare date, to stay consistent with plugin-written files.
 
 ---
 
@@ -297,7 +309,7 @@ On every task creation:
 
 **Adding a new project:** confirm the note name, create a stub if needed, add to `tasknotes-config.md`, then create the task.
 
-**No projects configured:** tasks can be created without `projects:`. Inform the user the task will not appear in any project view or trigger the Relationships Widget.
+**No projects configured:** tasks can be created without `projects:`. Inform the user the task will not appear in any project view or trigger the Relationships Widget. (On the MCP/HTTP create path an omitted `projects:` may instead be filled by the plugin's configured default project - see Scheduled vs Due, Plugin creation defaults - so verify what actually landed.)
 
 ---
 
@@ -334,7 +346,7 @@ Rule: inline checklists for steps within one task; separate files for work with 
 2. Identify domain; look up project note and context
 3. Verify project note exists (see Project Routing Discipline)
 4. Generate filename: `YYYY-MM-DD-<slug>.md`. Append `-2`, `-3` if file exists.
-5. Get today's date for `dateCreated` and `dateModified`
+5. Set `dateCreated` and `dateModified` to the current ISO 8601 timestamp with timezone offset (match the plugin's format); `scheduled`/`due`, if set, are date-only `YYYY-MM-DD`
 6. Write file with required frontmatter + relevant optional fields + body
 7. Confirm filename and key fields to the user
 
@@ -429,7 +441,7 @@ The skill writes the recurrence pattern; the plugin manages completed instances 
    ```
 
 3. Write the task file with `recurrence`, `recurrence_anchor`, and `scheduled` set to the first occurrence
-4. For later per-instance completion: use `tasknotes_complete_recurring_instance` (MCP) or `POST /api/tasks/:id/complete-instance` (HTTP) when available; on a filesystem-only surface, completions go through the plugin GUI
+4. For later per-instance completion: use `tasknotes_complete_recurring_instance` (MCP) or `POST /api/tasks/:id/complete-instance` (HTTP) when available; on a filesystem-only surface, completions go through the plugin GUI. (The HTTP endpoint honours a specific `date` only on plugin v4.13.8+; earlier versions ignored it and completed today's occurrence.)
 
 ---
 
