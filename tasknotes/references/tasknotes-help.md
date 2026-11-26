@@ -2,6 +2,8 @@
 
 Setup instructions, full API reference, and troubleshooting for all TaskNotes access methods. The tasknotes skill reads this file when connection or setup problems arise and uses it to guide users through fixes.
 
+Written for TaskNotes plugin v5 (5.0.0 and later; checked against 5.0.5). For a vault still on 4.x, see "TaskNotes 4.x notes" near the end.
+
 **Plugin docs:** https://tasknotes.dev/
 **HTTP API docs:** https://tasknotes.dev/HTTP_API/
 **MCP / integrations:** https://tasknotes.dev/features/integrations/
@@ -21,21 +23,21 @@ Setup instructions, full API reference, and troubleshooting for all TaskNotes ac
 
 ## Enabling the MCP server and HTTP API
 
-Both run inside the TaskNotes Obsidian plugin (v4.5.1+). They are only available while Obsidian is running.
+Both run inside the TaskNotes Obsidian plugin (desktop only). They are only available while Obsidian is running.
 
 **In Obsidian:**
-1. Settings → TaskNotes → Integrations
-2. Enable the **HTTP API** toggle
-3. Enable the **MCP Server** toggle
-4. Note the port (default: 8080)
-5. Copy the value of **API authentication token** in that same HTTP API section - every request needs it
+1. Settings → TaskNotes → Advanced → HTTP API
+2. Turn on **Enable HTTP API**
+3. Turn on **Enable MCP server** (requires the HTTP API)
+4. Note the **API port** (default: 8080)
+5. Copy the value of **API authentication token** on that same page - every request needs it
 6. Restart Obsidian
 
 **Authentication is required (plugin v4.13.0+).** Every HTTP API and MCP request must carry `Authorization: Bearer <token>`. An empty token field no longer means "no authentication": the plugin generates a token instead, and rejects every request that does not present it. A setup that previously connected without a token stops working on upgrade until the token reaches the client config.
 
-**Getting the token.** Settings → TaskNotes → Integrations → HTTP API → **API authentication token**. The plugin's own instruction for generating one: enable HTTP API, leave that field empty, restart Obsidian, then copy the generated value into your client's bearer authentication settings. It is a TaskNotes token, not your AI provider's API key. Update every client whenever it changes.
+**Getting the token.** Settings → TaskNotes → Advanced → HTTP API → **API authentication token**. The plugin's own instruction for generating one: enable HTTP API, leave that field empty, restart Obsidian, then copy the generated value into your client's bearer authentication settings. It is a TaskNotes token, not your AI provider's API key. Update every client whenever it changes.
 
-Read it from the settings pane, never out of the plugin's `data.json` - that file is plugin-owned state, and the skill never reads or writes it.
+Read it from the settings pane. Since v5 the token is not in `data.json` at all: it is kept in Obsidian Secret Storage on each device, so every device that runs the HTTP API has its own token, and syncing or committing `data.json` does not share it. Clearing the field does not turn authentication off; requests are rejected until a token is configured or generated at the next start. The skill never reads or writes plugin files to find it.
 
 **Verify:**
 
@@ -110,7 +112,7 @@ All platforms that support MCP can connect to the same URL, and all of them must
 
 ## Finding the configured port
 
-If port 8080 is in use, change it in Obsidian: Settings → TaskNotes → Integrations → HTTP API → Port.
+If port 8080 is in use, change it in Obsidian: Settings → TaskNotes → Advanced → HTTP API → **API port**.
 
 Update the port in your agent config to match.
 
@@ -126,11 +128,11 @@ The HTTP API and MCP server bind to loopback only (`127.0.0.1`) - they are not r
 
 **Where TaskNotes creates its folders by default:** The plugin creates `TaskNotes/Tasks/` and `TaskNotes/Views/` directly under the Obsidian vault root - not inside any subfolder.
 
-Settings → TaskNotes → General → **Default tasks folder** controls where new task files are written. The plugin's default value is `TaskNotes/Tasks`.
+Settings → TaskNotes → Task files → Task storage → **Default tasks folder** controls where new task files are written. The plugin's default value is `TaskNotes/Tasks`.
 
-**Auto-create task folder:** Settings → TaskNotes → General has an option to automatically create the task folder on startup if it does not exist. When enabled, Obsidian will recreate the folder at vault root even if you have moved it elsewhere. **If you move your TaskNotes folder inside a narrower filesystem scope, disable this toggle** - otherwise the plugin will recreate an empty folder at vault root and task creation may silently route to the wrong location.
+**Auto-create task folder:** if your plugin version offers an option to create the task folder automatically on startup (4.x had one under General; look under Task files in v5), note what it does: When enabled, Obsidian will recreate the folder at vault root even if you have moved it elsewhere. **If you move your TaskNotes folder inside a narrower filesystem scope, disable this toggle** - otherwise the plugin will recreate an empty folder at vault root and task creation may silently route to the wrong location.
 
-Reference: https://tasknotes.dev/settings/general/
+Reference: https://tasknotes.dev/settings/general/ (the v5 "Task files" page)
 
 ### If your agent's filesystem scope is narrower than the vault root
 
@@ -140,11 +142,11 @@ Many agent setups scope the filesystem tool to a subdirectory rather than the fu
 
 1. In Obsidian, create a `TaskNotes/` folder inside your scoped directory (e.g., `Agent Access/TaskNotes/`)
 2. Move your existing `TaskNotes/Tasks/` and `TaskNotes/Views/` contents into it
-3. Update Settings → TaskNotes → General → Default tasks folder to the new path (e.g., `Agent Access/TaskNotes/Tasks`)
-4. **Disable auto-create task folder** so the plugin does not recreate the folder at vault root
+3. Update Settings → TaskNotes → Task files → Task storage → Default tasks folder to the new path (e.g., `Agent Access/TaskNotes/Tasks`)
+4. **Disable auto-create task folder**, if your version has it, so the plugin does not recreate the folder at vault root
 5. Update `tasks_folder` in `tasknotes-config.md` to match (see section below)
 
-**Archive folder:** If Settings → TaskNotes → General → Move Archived Tasks to Folder is enabled, the plugin moves archived tasks to a subfolder. The default is typically a subfolder under the task folder (e.g., `TaskNotes/Tasks/Archive`). Verify this destination is also inside your filesystem scope, or change it to a path that is. The archive path must be updated in both Obsidian settings and in `tasknotes-config.md`.
+**Archive folder:** If archive moves are enabled (Settings → TaskNotes → Task files → Task storage), the plugin moves archived tasks to a subfolder. The default is typically a subfolder under the task folder (e.g., `TaskNotes/Tasks/Archive`). Verify this destination is also inside your filesystem scope, or change it to a path that is. The archive path must be updated in both Obsidian settings and in `tasknotes-config.md`.
 
 ### tasknotes-config.md implications
 
@@ -165,9 +167,9 @@ The skill reads `tasknotes-config.md` to find the `tasks_folder` path for filesy
 
 The plugin fills omitted fields on new tasks from its task-creation defaults, and it **ships with Default scheduled date set to Today**. Every task created without an explicit scheduled date - through the GUI, natural-language input, note conversion, and the MCP/HTTP create path - is therefore scheduled for its creation day, and reads as stale (a past `scheduled` date) from the next day on.
 
-If you do not want tasks auto-scheduled, change it yourself in the plugin - the skill cannot: **Settings → TaskNotes → Task Properties → Default scheduled date → None**. The options are None, Today, Tomorrow, and Next Week, and the same control exists for Default due date (which ships as None). With Default scheduled date set to None, a new task stays unscheduled unless you give it a date, so `scheduled` becomes a deliberate "I plan to work on this that day" signal rather than noise. Treat `due` as the deadline (a past due is overdue) and `scheduled` as the planned work-day (a past scheduled date has only slipped).
+If you do not want tasks auto-scheduled, change it yourself in the plugin - the skill cannot: **Settings → TaskNotes → Task creation → Defaults → Default scheduled date → None**. The options are None, Today, Tomorrow, and Next Week, and the same control exists for Default due date (which ships as None). On the same page, **Use default projects only when no project is specified** (v5, off by default) stops the default projects being added to a task that already names a project. With Default scheduled date set to None, a new task stays unscheduled unless you give it a date, so `scheduled` becomes a deliberate "I plan to work on this that day" signal rather than noise. Treat `due` as the deadline (a past due is overdue) and `scheduled` as the planned work-day (a past scheduled date has only slipped).
 
-Reference: https://tasknotes.dev/settings/task-properties/
+Reference: https://tasknotes.dev/settings/defaults/
 
 ---
 
@@ -175,9 +177,9 @@ Reference: https://tasknotes.dev/settings/task-properties/
 
 Base URL: `http://127.0.0.1:{port}/api`
 
-**Authentication: required (plugin v4.13.0+).** Send `Authorization: Bearer {token}` on every request, `/api/health` included. The token is at Settings → TaskNotes → Integrations → HTTP API → **API authentication token**; if that field is empty when the server starts, the plugin generates one and saves it there. Requests without it return `401 {"success":false,"error":"Authentication required"}`.
+**Authentication: required (plugin v4.13.0+).** Send `Authorization: Bearer {token}` on every request, `/api/health` included. The token is at Settings → TaskNotes → Advanced → HTTP API → **API authentication token**; if that field is empty when the server starts, the plugin generates one, saves it to that device's Secret Storage, and shows a notice asking you to update your clients. Requests without it return `401 {"success":false,"error":"Authentication required"}`.
 
-Note: the upstream page linked below still described authentication as optional when this reference was last revised (2026-09-20). That was true up to 4.12.x. The behaviour above was measured against a running 4.13.2 listener.
+Responses use `{"success": true, "data": ...}` or `{"success": false, "error": "..."}`. Common errors: `400` invalid request, `401` missing or wrong token, `404` missing task or resource.
 
 Full docs: https://tasknotes.dev/HTTP_API/
 
@@ -197,17 +199,23 @@ Full docs: https://tasknotes.dev/HTTP_API/
 |---|---|---|
 | GET | `/api/tasks` | List tasks (pagination only - no filtering; use query endpoint) |
 | POST | `/api/tasks` | Create a task |
-| GET | `/api/tasks/:id` | Get one task's frontmatter by vault-relative path |
+| GET | `/api/tasks/:id` | Get one task (frontmatter, plus body in `details`) by vault-relative path |
 | PUT | `/api/tasks/:id` | Update task with partial payload |
-| DELETE | `/api/tasks/:id` | Delete task file |
+| DELETE | `/api/tasks/:id` | Permanently delete the task file (the skill asks the user first) |
 | POST | `/api/tasks/:id/toggle-status` | Cycle status through configured workflow |
-| POST | `/api/tasks/:id/archive` | Toggle archived state |
+| POST | `/api/tasks/:id/archive` | Toggle archived state (a toggle: check `archived` first) |
 | POST | `/api/tasks/:id/complete-instance` | Complete one instance of a recurring task |
+| POST | `/api/tasks/:id/materialize-occurrence` | Create or return the occurrence note for a date (idempotent) |
 | POST | `/api/tasks/query` | Advanced filtering with AND/OR logic, sorting, grouping |
 | GET | `/api/filter-options` | Available statuses, priorities, tags, contexts, projects |
-| GET | `/api/stats` | Task counts by status, priority, overdue, etc. |
+| GET | `/api/stats` | Task counts: total, completed, active, overdue, archived, withTimeTracking |
+| POST | `/api/bases/default-files/update` | Overwrite the default `.base` files from current settings (replaces manual edits - ask the user first) |
 
-**`:id` format:** URL-encoded vault-relative path. Example: `Agent%20Access%2FTaskNotes%2FTasks%2Fmy-task.md`
+**`:id` format:** URL-encoded vault-relative path. Example: `Agent%20Access%2FTaskNotes%2FTasks%2Fmy-task.md`. This is the path, not the v5 frontmatter `id` UUID.
+
+**`complete-instance` body:** optional `date` (`YYYY-MM-DD` recommended; an ISO timestamp is also accepted), legacy alias `instanceDate`. Conflicting aliases or a malformed date return `400` without completing anything. If the parent uses occurrence notes, the matching note is completed (and, with **Create next after completion**, created first if missing).
+
+**`materialize-occurrence` body:** `date` (required, e.g. `2026-06-01`).
 
 **Partial updates:** `PUT /api/tasks/:id` accepts a partial payload - only the fields you send change. Tag handling in partial updates is correct as of v4.9.1 (earlier versions could rewrite native tags with `#` prefixes or duplicate the task tag). Since v4.12.4, sending `{"contexts": []}` or `{"blockedBy": []}` clears those fields; earlier versions ignored an empty array, so there was no way to clear them over HTTP.
 
@@ -226,11 +234,11 @@ Full docs: https://tasknotes.dev/HTTP_API/
 }
 ```
 
-**MCP note:** the `tasknotes_query_tasks` MCP tool takes these fields **flattened to top-level arguments** (`conjunction`, `children`, optional `sortKey` / `sortDirection` / `groupKey`) - WITHOUT the outer `{ "type": "group", "id": "root", ... }` wrapper shown above. Passing the wrapper to the MCP tool fails with a `conjunction`/`children` validation error. See SKILL.md "Path: MCP".
+**MCP note:** the `tasknotes_query_tasks` MCP tool takes these fields **as top-level arguments** (`conjunction`, `children`, optional `sortKey` / `sortDirection` / `groupKey`). Nesting the group under another key fails with a `conjunction`/`children` validation error; the extra top-level `type` and `id` keys are tolerated (checked on 5.0.5). Invalid properties or operators return an error result, and a valid query with no matches returns `{"all":[]}`. See SKILL.md "Path: MCP".
 
-**Valid filter operators:** `is`, `is-not`, `contains`, `does-not-contain`, `is-before`, `is-after`, `is-on-or-before`, `is-on-or-after`, `is-empty`, `is-not-empty`, `is-checked`, `is-not-checked`, `is-greater-than`, `is-less-than`, `is-greater-than-or-equal`, `is-less-than-or-equal`. The `value` field is omitted for the empty/checked operators. User-defined fields use `property: "user:<fieldId>"`.
+**Valid filter operators:** `is`, `is-not`, `contains`, `does-not-contain`, `is-before`, `is-after`, `is-on-or-before`, `is-on-or-after`, `is-empty`, `is-not-empty`, `is-checked`, `is-not-checked`, `is-greater-than`, `is-less-than`, `is-greater-than-or-equal`, `is-less-than-or-equal`. The `value` field is omitted for the empty/checked operators over HTTP; the MCP tool rejects a condition with no `value` key, so pass `"value": true` there (checked on 5.0.5 for `is-checked` / `is-not-checked`). User-defined fields use `property: "user:<fieldId>"`; `user:<frontmatter-key>`, `user.<fieldId>` and `user.<frontmatter-key>` are also accepted, bare keys are not. `GET /api/filter-options` lists each field's id and aliases.
 
-**Create task body fields:** `title` (required), `details`, `status`, `priority`, `due`, `scheduled`, `tags`, `contexts`, `projects`, `recurrence`, `timeEstimate`
+**Create task body fields:** `title` (required), `details`, `status`, `priority`, `due`, `scheduled`, `tags`, `contexts`, `projects`, `recurrence`, `recurrence_anchor`, `timeEstimate`, `reminders`, `blockedBy` (array of `{uid, reltype, gap?}`)
 
 ### Time tracking
 
@@ -280,16 +288,32 @@ Webhook docs: https://tasknotes.dev/webhooks/
 
 ---
 
-## TaskNotes v5 (opt-in beta) - heads-up for agents
+## TaskNotes v5 - what changed for agents
 
-TaskNotes 5.0 is in opt-in beta; 4.14.0 is the recommended stable release and this skill targets the 4.x line. When v5 ships stable, the agent-facing surfaces move in ways that will need a skill refresh:
+TaskNotes 5.0.0 is the stable line (5.0.5 at the time of writing). What matters to an agent:
 
-- **Auth token storage.** The HTTP API / MCP token moves out of `data.json` into Obsidian Secret Storage, per device. A synced device that starts v5 generates its own token, which must be copied into that device's client config.
-- **Settings reorganized.** The settings UI is rebuilt around Obsidian's native navigation, so the `Settings → TaskNotes → ...` paths in this guide may move.
-- **Metadata model (mdbase).** v5 introduces a new metadata model and a v4-to-v5 migration; existing Base files are not rewritten automatically.
-- **Removed:** the Statistics and Pomodoro-statistics dashboards (the Pomodoro timer, time tracking, stored history, and HTTP/MCP API are retained).
+- **Settings regrouped.** Settings use Obsidian's native pages: Task files, Properties, Task creation, Appearance & interaction, Time & reminders, Calendars & integrations, TaskNotes App, Advanced. Obsidian's settings search finds individual options. The HTTP API and MCP toggles, port and token are under **Advanced → HTTP API**; task folder, archive folder and task identification under **Task files**; default dates and projects under **Task creation → Defaults**; the project subtasks (Relationships) widget under **Appearance & interaction → UI elements**.
+- **Token in Secret Storage, per device.** On first v5 launch the token moves from `data.json` into Obsidian Secret Storage on that device. A synced device that starts v5 after the token has already left `data.json` generates its own token and shows a notice; the clients on that device need the new token. Clearing the token does not allow unauthenticated access.
+- **Stable task IDs.** New and converted tasks get a UUID in frontmatter `id` (key remappable under Properties → Metadata & integration properties → Task ID). Existing tasks without one stay valid and are not rewritten. HTTP and MCP still address tasks by vault path.
+- **New optional frontmatter.** `attachments` (a list of file links) and, with type definitions on, `assignees` (links to person notes).
+- **mdbase type definitions.** Settings → TaskNotes → TaskNotes App → **Turn on type definitions**: on by default for new installs, unchanged (normally off) for vaults upgraded from 4.x. When on, the plugin maintains `mdbase.yaml`, a hidden `_mdbase/` folder (or existing `_types/`, `_contracts/`, `_settings/`), and backups under `.tasknotes/migrations/`. Agents never edit these. The command **TaskNotes: Check collection** then lists tasks with a missing creation date or an unconfigured status and offers backed-up repairs.
+- **Recurring tasks.** Since 5.0.2 the status control of a recurring task is labelled **Series status** and sets the whole series; per-occurrence completion goes through complete-instance. A series whose rule has `COUNT` or `UNTIL` completes itself after its last occurrence.
+- **Removed:** the Statistics and Pomodoro-statistics dashboards. The Pomodoro timer, time tracking, stored history and the HTTP/MCP routes remain.
+- **Working with Obsidian closed.** The HTTP API settings page points to mdbase Connect and an "mdbase MCP server" for that case. The skill does not route to it; there is no primary documentation for it yet.
 
-Do not treat v5 behaviour as current for a 4.x vault. Migration guide: https://tasknotes.dev/migration-v4-to-v5/
+Migration guide: https://tasknotes.dev/migration-v4-to-v5/
+
+---
+
+## TaskNotes 4.x notes
+
+The skill defaults to v5. On a vault still on 4.x (4.13.0 and later require the API token):
+
+- **Settings paths.** HTTP API, MCP toggle, port and token are under Settings → TaskNotes → **Integrations** → HTTP API. Task folder and archive folder are under **General**. Default scheduled date is under **Task Properties**. The Relationships widget is under **Appearance → UI Elements**.
+- **Token storage.** 4.x keeps the token in the plugin's `data.json`, shared across synced devices. Still read it from the settings pane, never from the file.
+- **No `id`, `attachments` or `assignees`** properties, no **Check collection** command, and no **Series status** label (setting a recurring task's status still closes the series).
+- **Downgrading from v5 without restoring a backup:** 4.x finds no token in `data.json` and generates a new one, so every client needs updating. If an mdbase upgrade ran, restore `mdbase.yaml` and the task type from `.tasknotes/migrations/`.
+- Do not run 4.x and 5.x against the same synced vault; they store some settings differently.
 
 ---
 
@@ -298,8 +322,8 @@ Do not treat v5 behaviour as current for a 4.x vault. Migration guide: https://t
 ### MCP tools not loading
 
 1. Confirm Obsidian is running
-2. Confirm both toggles are enabled (HTTP API + MCP Server) in Settings → TaskNotes → Integrations
-3. Confirm the agent config carries `Authorization: Bearer <token>` and that it matches Settings → TaskNotes → Integrations → HTTP API → **API authentication token**
+2. Confirm **Enable HTTP API** and **Enable MCP server** are both on in Settings → TaskNotes → Advanced → HTTP API
+3. Confirm the agent config carries `Authorization: Bearer <token>` and that it matches Settings → TaskNotes → Advanced → HTTP API → **API authentication token** on this device (each device has its own token since v5)
 4. Confirm port matches between plugin settings and agent config
 5. Check `curl -H "Authorization: Bearer <token>" http://127.0.0.1:8080/api/health`. `{"status":"ok",...}` means the server is up and the agent connection is at fault; `401` means the token is missing or wrong; no response at all means the server is not running
 6. Restart both Obsidian and the agent
@@ -320,7 +344,7 @@ Fix: add the bearer token to the client config (see "Connecting an agent to the 
 ### Connection refused on port 8080
 
 - Another application may be using port 8080
-- Change the port in plugin settings (Settings → TaskNotes → Integrations → HTTP API → Port)
+- Change the port in plugin settings (Settings → TaskNotes → Advanced → HTTP API → API port)
 - Update the port in your agent config and restart
 
 ### Windows Firewall prompt
@@ -329,7 +353,11 @@ When Obsidian first starts the server, Windows may show a firewall prompt. Allow
 
 ### Toggles reset after update
 
-Plugin updates can reset settings. After any TaskNotes update, re-enable both toggles and restart Obsidian. Upgrading to 4.13.0 or later also introduces the token requirement: read Settings → TaskNotes → Integrations → HTTP API → **API authentication token** and make sure the client config carries it. Changing that token later invalidates every client until each one is updated.
+Plugin updates can reset settings. After any TaskNotes update, re-enable both toggles and restart Obsidian. Upgrading to 4.13.0 or later also introduces the token requirement: read Settings → TaskNotes → Advanced → HTTP API → **API authentication token** and make sure the client config carries it. Changing that token later invalidates every client until each one is updated.
+
+### Token stopped working after the v5 upgrade (synced vaults)
+
+In v5 each device keeps its own token in Obsidian Secret Storage. The first device to start v5 moves the old token out of `data.json`; any other synced device that starts v5 afterwards finds none, generates a new token and shows a notice. Clients on that device still sending the old token get `401` (with `mcp-remote`, the `RegistrationRejectedError` above). Copy the token shown under Settings → TaskNotes → Advanced → HTTP API on **that** device into its clients and restart them. Downgrading to 4.x also generates a new token.
 
 ### `mcp-remote` errors
 

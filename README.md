@@ -58,8 +58,8 @@ For time tracking, Pomodoro, calendar, and recurring task instance management wi
 
 **Required:**
 
-- **Obsidian** with the **TaskNotes plugin v4+** installed and enabled
-- **Bases** core plugin enabled (required by TaskNotes v4)
+- **Obsidian** with the **TaskNotes plugin v5** installed and enabled (TaskNotes v5 needs Obsidian 1.13.1 or newer). The skill defaults to v5; 4.x vaults are covered by notes in `references/tasknotes-help.md`.
+- **Bases** core plugin enabled (required by TaskNotes)
 - **An agent with filesystem access.** The skill reads and writes files on your local disk. How you get access depends on your platform:
   - **Claude Desktop** has no native filesystem access. Add a filesystem MCP - [Desktop Commander](https://github.com/wonderwhy-er/DesktopCommanderMCP) or the [official Anthropic filesystem MCP](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem), both installable via **Customize → Connectors**. When choosing, look for directory scoping, per-tool permissions, and shell access restrictions; these matter for security and privacy (see below). Desktop Commander has all three and is what this skill was built and tested with.
   - **Claude Co-Work and Claude Code** have filesystem access built in. No MCP required.
@@ -71,8 +71,8 @@ This skill has a hard dependency on [Obsidian](https://obsidian.md/) and the [Ta
 
 **Optional (unlocks MCP and HTTP API paths):**
 
-- **TaskNotes HTTP API:** enable in Settings → TaskNotes → Integrations → HTTP API. Adds reliable filtered queries, time tracking, Pomodoro, calendar events, and recurring task instance completion via REST calls to `127.0.0.1:8080`. As of plugin v4.13.0, requests must include a bearer token, read from Settings → TaskNotes → Integrations → HTTP API → **API authentication token** - see `references/tasknotes-help.md` for client configuration.
-- **TaskNotes MCP server:** enable in Settings → TaskNotes → Integrations → MCP Server (requires HTTP API toggle also on). Exposes 25 tools directly to the agent - the preferred path when Obsidian is running. As of plugin v4.13.0, connections must include the same bearer token (a TaskNotes token, not your AI provider's API key; to generate one, enable the HTTP API with the token field empty and restart Obsidian). See `references/tasknotes-help.md` in the skill for setup config and multi-platform instructions.
+- **TaskNotes HTTP API:** turn on **Enable HTTP API** in Settings → TaskNotes → Advanced → HTTP API. Adds reliable filtered queries, time tracking, Pomodoro, calendar events, and recurring task instance completion via REST calls to `127.0.0.1:8080`. As of plugin v4.13.0, requests must include a bearer token, read from Settings → TaskNotes → Advanced → HTTP API → **API authentication token**. Since v5 that token is stored per device in Obsidian Secret Storage, so each synced device has its own - see `references/tasknotes-help.md` for client configuration.
+- **TaskNotes MCP server:** turn on **Enable MCP server** on the same page (requires the HTTP API to be on). Exposes 25 tools directly to the agent - the preferred path when Obsidian is running. As of plugin v4.13.0, connections must include the same bearer token (a TaskNotes token, not your AI provider's API key; to generate one, enable the HTTP API with the token field empty and restart Obsidian). See `references/tasknotes-help.md` in the skill for setup config and multi-platform instructions.
 
 Both require Obsidian to be running. The skill falls back to filesystem access automatically if either is unavailable.
 
@@ -125,8 +125,8 @@ your-mcp-scope/          ← the folder your MCP is scoped to
 
 Two plugin settings to get right so the plugin and the skill agree on where tasks live:
 
-- **Settings -> TaskNotes -> General -> Task folder:** point it at the absolute path of the `Tasks/` folder above
-- **Settings -> TaskNotes -> General -> Auto-create task folder:** disable it. Otherwise the plugin may recreate `TaskNotes/` at your vault root (outside your scope), which defeats the scoping work you did
+- **Settings -> TaskNotes -> Task files -> Task storage -> Default tasks folder:** point it at the absolute path of the `Tasks/` folder above
+- **Auto-create task folder** (if your plugin version has it; under General on 4.x): disable it. Otherwise the plugin may recreate `TaskNotes/` at your vault root (outside your scope), which defeats the scoping work you did
 
 **1. Create tasknotes-config.md (optional)**
 
@@ -169,11 +169,11 @@ Agent-created tasks use a `YYYY-MM-DD-slug.md` filename convention. Tasks create
 
 **Task accumulation.** All tasks - open, done, and archived - stay in the Tasks folder by default. Archiving a task in TaskNotes sets an `archived` field; it does not move the file. The plugin's views filter by status and archive state so the GUI stays clean, but the folder grows without bound and the agent scans every file in it. At a few dozen tasks this is imperceptible. At several hundred it becomes slow, and at a few thousand it will fail or time out.
 
-TaskNotes has a built-in remedy: **Settings -> TaskNotes -> General -> Move Archived Tasks to Folder**. Enable it and point it at a subfolder like `Tasks/Archive/`. The plugin will then move files there automatically when you archive them, keeping your main task list tidy. TaskNotes scans recursively so those files remain visible to the plugin - but they stay out of your way in the GUI.
+TaskNotes has a built-in remedy: enable moving archived tasks to a folder under **Settings -> TaskNotes -> Task files -> Task storage** (General on 4.x). Enable it and point it at a subfolder like `Tasks/Archive/`. The plugin will then move files there automatically when you archive them, keeping your main task list tidy. TaskNotes scans recursively so those files remain visible to the plugin - but they stay out of your way in the GUI.
 
-Before enabling this, verify that your plugin folder settings and `tasknotes-config.md` are pointing at the same locations. The plugin manages `TaskNotes/`, `TaskNotes/Tasks/`, and the archive subfolder independently from the skill's config; it will not infer from `tasks_folder` in your config file. If they are out of sync, archived tasks will move somewhere neither the plugin nor the agent expects. Check: Settings -> TaskNotes -> General -> Task folder resolves to the same folder as `tasks_folder` in your config, and the archive subfolder you configure sits inside it.
+Before enabling this, verify that your plugin folder settings and `tasknotes-config.md` are pointing at the same locations. The plugin manages `TaskNotes/`, `TaskNotes/Tasks/`, and the archive subfolder independently from the skill's config; it will not infer from `tasks_folder` in your config file. If they are out of sync, archived tasks will move somewhere neither the plugin nor the agent expects. Check: Settings -> TaskNotes -> Task files -> Task storage -> Default tasks folder resolves to the same folder as `tasks_folder` in your config, and the archive subfolder you configure sits inside it.
 
-This does not fully solve the agent scan problem, since `Tasks/Archive/` is still scanned by the agent. When the folder gets heavy, the skill will flag it and walk you through archiving done tasks via the plugin GUI - presenting a list sorted by age and linking you to the relevant plugin settings.
+This does not fully solve the agent scan problem, since `Tasks/Archive/` is still scanned by the agent. When the folder gets heavy, the skill will flag it and present done tasks sorted by age. With MCP or the HTTP API available it can archive the ones you confirm itself; on the filesystem path it walks you through archiving them in the plugin GUI.
 
 ## Privacy
 
@@ -199,7 +199,7 @@ Give the agent-accessible folder an obvious name - `Agent Access` makes the boun
 
 Scope your filesystem MCP to that folder. If you use Desktop Commander, its `allowedDirectories` setting is the right lever. Anthropic's own filesystem MCP scopes to whatever directories you configure at setup. Agents with native filesystem access, such as Claude Code, are not constrained by MCP-level controls and must be scoped separately through their own configuration.
 
-The TaskNotes plugin does not respect your MCP scoping decisions. If the plugin's Task folder setting points outside your MCP scope, or auto-create recreates `TaskNotes/` at vault root, the skill cannot reach your tasks. After setting up, verify that both the plugin's Task folder and your `tasknotes-config.md` resolve to the same location inside your MCP scope, and disable Settings -> TaskNotes -> General -> Auto-create task folder so the plugin does not silently undo your setup.
+The TaskNotes plugin does not respect your MCP scoping decisions. If the plugin's Task folder setting points outside your MCP scope, or auto-create recreates `TaskNotes/` at vault root, the skill cannot reach your tasks. After setting up, verify that both the plugin's Task folder and your `tasknotes-config.md` resolve to the same location inside your MCP scope, and disable auto-create task folder (if your plugin version has it) so the plugin does not silently undo your setup.
 
 The filesystem MCP you use may also send data of its own. Desktop Commander, for example, sends anonymised telemetry by default unless you disable it in its config. Check the documentation and privacy settings of any MCP tool before connecting it to sensitive material.
 
