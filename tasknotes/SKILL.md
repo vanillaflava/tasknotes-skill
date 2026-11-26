@@ -2,12 +2,14 @@
 name: tasknotes
 description: "Manage tasks in an Obsidian TaskNotes vault. Use for creating, reading, updating, or completing tasks; checking what is open or in progress; adding items to a list; marking tasks done or in progress; updating task status or priority; investigating why a task is missing from a view or board; troubleshooting TaskNotes MCP or API connection issues; setting up or configuring TaskNotes; or running a schema diagnostic on task files. Routes automatically to the best available access method: MCP server, HTTP API, or direct file access. Bundled help at references/tasknotes-help.md."
 metadata:
-  version: "4.4"
+  version: "5.0"
 ---
 
 # TaskNotes
 
 Multi-modal task management for Obsidian TaskNotes vaults. The skill probes the environment first and routes to the best available access method.
+
+Targets TaskNotes plugin v5 (5.0.0 and later). On a 4.x vault the settings paths and token storage differ; see "TaskNotes 4.x notes" in `references/tasknotes-help.md`.
 
 ---
 
@@ -33,11 +35,11 @@ Attempt `web_fetch("http://127.0.0.1:8080/api/health")`. Three outcomes, and the
 | `401 {"success":false,"error":"Authentication required"}` | Server is running; the request carries no API token |
 | Connection refused or timeout | Server is not running on that port |
 
-**On a `401`:** the surface exists but is unusable until requests carry `Authorization: Bearer <token>` (plugin v4.13.0+). If you can set headers, the token is at Settings → TaskNotes → Integrations → HTTP API → **API authentication token**; ask the user for it and retry. Never read it out of the plugin's `data.json`. If you cannot, tell the user their client config is missing the token and point them at `references/tasknotes-help.md`. **Do not quietly fall through to the filesystem path.** That hides a one-line misconfiguration and silently costs the user filtered queries, time tracking, Pomodoro and per-instance recurring completion. Say what is missing.
+**On a `401`:** the surface exists but is unusable until requests carry `Authorization: Bearer <token>` (plugin v4.13.0+). If you can set headers, the token is at Settings → TaskNotes → Advanced → HTTP API → **API authentication token**; ask the user for it and retry. Never try to read it from plugin files: since v5 it lives in Obsidian Secret Storage on each device, not in `data.json`, and each synced device has its own token. If you cannot, tell the user their client config is missing the token and point them at `references/tasknotes-help.md`. **Do not quietly fall through to the filesystem path.** That hides a one-line misconfiguration and silently costs the user filtered queries, time tracking, Pomodoro and per-instance recurring completion. Say what is missing.
 
 **On connection refused or timeout,** ask the user:
-- *"What port is your TaskNotes HTTP API configured on? Check Settings → TaskNotes → Integrations → HTTP API."*
-- *"Are both the HTTP API toggle and the MCP Server toggle enabled in those settings?"*
+- *"What port is your TaskNotes HTTP API configured on? Check Settings → TaskNotes → Advanced → HTTP API."*
+- *"Are both **Enable HTTP API** and **Enable MCP server** turned on there?"*
 
 Try the user-supplied port before giving up. If still unreachable, HTTP API is unavailable.
 
@@ -68,7 +70,7 @@ Check whether any loaded tool can read and write `.md` files. Do not assume a sp
 | Read task body / checklist | `tasknotes_get_task` (details field) | `GET /api/tasks/:id` | Read .md file |
 | Write task body | `tasknotes_update_task` (details field) | `PUT /api/tasks/:id` | Write .md file |
 | Complete recurring instance | `tasknotes_complete_recurring_instance` | `POST /api/tasks/:id/complete-instance` | Not supported (GUI only) |
-| Schema diagnostic | ✗ → Workflow 9 | ✗ → Workflow 9 | Workflow 9 |
+| Schema diagnostic | ✗ → Workflow 9 | ✗ → Workflow 9 | Workflow 9 (or the plugin's **TaskNotes: Check collection**) |
 | Time tracking | `tasknotes_*_time_tracking` | `/api/tasks/:id/time/*` | Manual (complex) |
 | Pomodoro | `tasknotes_*_pomodoro` | `/api/pomodoro/*` | Not supported |
 | Works when Obsidian closed | ✗ | ✗ | ✓ |
@@ -91,14 +93,16 @@ The `tasknotes:` MCP tools are mostly self-describing - call them directly. Two 
 - `tasknotes_get_filter_options` - list available statuses, priorities, projects, contexts
 - `tasknotes_complete_recurring_instance` / `tasknotes_materialize_occurrence` - recurring tasks (see below)
 
+The server also exposes `tasknotes_delete_task`, `tasknotes_toggle_archive`, `tasknotes_create_task_from_text`, and stats, calendar-event, time-tracking and Pomodoro tools (25 in all on 5.0.5). Do not call `tasknotes_delete_task` - see Safety Rules.
+
 In deferred-tools environments, load a tool's schema before guessing its args: `tool_search("select:tasknotes_query_tasks")`.
 
-**Querying with `tasknotes_query_tasks` - flattened arg shape.** The MCP tool takes the filter group **flattened to top-level arguments**, NOT the wrapped `{"type":"group", ...}` body documented for the HTTP API in `references/tasknotes-help.md`. Passing the HTTP wrapper fails with a `conjunction`/`children` validation error.
+**Querying with `tasknotes_query_tasks` - flattened arg shape.** The MCP tool takes the filter group's fields **as top-level arguments**. Do NOT nest the group under another key (such as `query` or `filter`): that fails with a `conjunction`/`children` validation error. The extra top-level `"type": "group"` and `"id"` keys of the HTTP query body in `references/tasknotes-help.md` are tolerated (checked on 5.0.5), so an HTTP body passed as-is works; nesting it does not.
 
 - Required top-level: `conjunction` (`"and"` | `"or"`) and `children` (array). Optional: `sortKey`, `sortDirection` (`"asc"` | `"desc"`), `groupKey`.
 - Each child is a condition `{ "type": "condition", "id": "<any stable string>", "property": "<field>", "operator": "<op>", "value": <value> }` - the key is `property`, NOT `field`. Nested groups are allowed as children.
 - Common operators: `is`, `is-not`, `contains`, `does-not-contain`, `is-empty`, `is-not-empty` (hyphenated - `is-not`, not `is not`). Full list in `references/tasknotes-help.md`.
-- Since plugin v4.13.9 a query with an invalid `property`, an unknown operator, or an incomplete condition returns an **error**, not a silently empty result - so an empty result means "nothing matched", not "malformed filter". On older plugins the two were indistinguishable: if a query you expect to populate comes back empty on a plugin before v4.13.9, suspect the filter shape before concluding the task is missing. Custom fields accept either `user:<id>` or `user.<id>`.
+- A query with an invalid `property`, an unknown operator, or an incomplete condition returns an **error** (`isError: true`, e.g. `Unknown property: ...`), not a silently empty result - so an empty result (`{"all":[]}`) means "nothing matched", not "malformed filter". (True since plugin v4.13.9; on older plugins the two were indistinguishable.) Custom fields accept `user:<id>`, `user.<id>`, `user:<frontmatter-key>` or `user.<frontmatter-key>`, not bare keys; `tasknotes_get_filter_options` lists them.
 
 ```json
 {
@@ -112,9 +116,9 @@ In deferred-tools environments, load a tool's schema before guessing its args: `
 }
 ```
 
-`tasknotes_get_task` and `tasknotes_update_task` take **`id`** (the vault-relative file path), not `taskId`.
+`tasknotes_get_task` and `tasknotes_update_task` take **`id`** (the vault-relative file path), not `taskId`. In v5 this is still the path, not the task's frontmatter `id` UUID.
 
-**Recurring tasks (MCP).** To complete a single occurrence without closing the series, call `tasknotes_complete_recurring_instance` (`id` = task file path; optional `date` = `YYYY-MM-DD`, defaults to today). To create a concrete occurrence note for one date, call `tasknotes_materialize_occurrence` (`id`, `date`). Never set `status: done` on the recurring task itself - that closes the whole series. See Workflow 10.
+**Recurring tasks (MCP).** To complete a single occurrence without closing the series, call `tasknotes_complete_recurring_instance` (`id` = task file path; optional `date` = `YYYY-MM-DD`, defaults to today). To create a concrete occurrence note for one date, call `tasknotes_materialize_occurrence` (`id`, `date`). Never set `status: done` on the recurring task itself - a recurring task's status is its **Series status** (so labelled since v5.0.2) and closes the whole series. See Workflow 10.
 
 **Conventions that apply regardless of path:**
 - `projects:` must be a wikilink array - `["[[Domain - Home]]"]` not a plain string; plain strings are silently broken and the task will not appear on any Kanban
@@ -132,7 +136,7 @@ Use when the HTTP API is available but MCP is not.
 
 **Base URL:** `http://127.0.0.1:{port}/api` (default port: 8080). Dial `127.0.0.1`, not `localhost` - the listener is IPv4-loopback only, and `localhost` resolves to `::1` first on many systems.
 
-**Every request needs `Authorization: Bearer <token>`** (plugin v4.13.0+), `/api/health` included - no endpoint is exempt. The token is at Settings → TaskNotes → Integrations → HTTP API → **API authentication token**. Without it every call returns `401 {"success":false,"error":"Authentication required"}`.
+**Every request needs `Authorization: Bearer <token>`** (plugin v4.13.0+), `/api/health` included - no endpoint is exempt. The token is at Settings → TaskNotes → Advanced → HTTP API → **API authentication token** (stored per device in Obsidian Secret Storage since v5). Without it every call returns `401 {"success":false,"error":"Authentication required"}`.
 
 **Key endpoints:**
 
@@ -145,9 +149,12 @@ Use when the HTTP API is available but MCP is not.
 | PUT | `/api/tasks/{id}` | Update task fields |
 | POST | `/api/tasks/query` | Filter tasks with AND/OR logic |
 | POST | `/api/tasks/{id}/toggle-status` | Cycle task status |
+| POST | `/api/tasks/{id}/archive` | Toggle archived state |
+| POST | `/api/tasks/{id}/complete-instance` | Complete one recurring occurrence (body: optional `date`, alias `instanceDate`; a malformed date returns `400`) |
+| POST | `/api/tasks/{id}/materialize-occurrence` | Create or return the occurrence note for a date (body: `date`, required) |
 | GET | `/api/filter-options` | List valid statuses, priorities, projects |
 
-The `{id}` parameter is the URL-encoded vault-relative file path (e.g. `Agent%20Access%2FTaskNotes%2FTasks%2Ftask.md`).
+The `{id}` parameter is the URL-encoded vault-relative file path (e.g. `Agent%20Access%2FTaskNotes%2FTasks%2Ftask.md`), not the frontmatter `id`. `DELETE /api/tasks/{id}` also exists; do not use it (see Safety Rules). Time tracking, Pomodoro, calendar, webhook and NLP routes are listed in `references/tasknotes-help.md`.
 
 **Schema diagnostic:** Not available via HTTP API. Switch to Filesystem path → Workflow 9.
 
@@ -182,7 +189,7 @@ The skill bundles a default `tasknotes-config.md` at `references/tasknotes-confi
    - Look for an existing `TaskNotes/Tasks` folder as a placement hint.
    - **Found:** *"I found TaskNotes/Tasks at [path]. Deploy `tasknotes-config.md` alongside it at [parent]?"* Wait for confirmation.
    - **Not found:** ask the user for a folder path; deploy config and create `TaskNotes/Tasks/` on confirmation.
-   - Remind the user to set Settings → TaskNotes → General → Task folder to match.
+   - Remind the user to set Settings → TaskNotes → Task files → Task storage → **Default tasks folder** to match.
 
 **Resolving `tasks_folder`:** Join the value with the config file's directory. If it resolves outside (e.g. uses `../`), stop and ask the user to confirm.
 
@@ -219,7 +226,9 @@ Use `default_status`, `default_priority`, and `default_tags` from config. Field 
 
 **Leave empty until set:** `completedDate`.
 
-**Add only as needed:** `due: YYYY-MM-DD`, `timeEstimate: 30` (minutes).
+**Add only as needed:** `due: YYYY-MM-DD`, `timeEstimate: 30` (minutes). Plugin v5 also reads an optional `attachments` list and, with mdbase type definitions on, an optional `assignees` list of links to person notes.
+
+**Stable task ID (`id`, plugin v5).** Tasks created or converted by the plugin get a UUID in the `id` frontmatter property (the key can be remapped under Settings → TaskNotes → Properties → Metadata & integration properties → Task ID). On the filesystem path, leave `id` off new tasks - a task without one is valid. Never change or remove an existing `id`: integrations use it to find the task after renames and moves.
 
 ### Scheduled vs Due
 
@@ -230,7 +239,7 @@ Use `default_status`, `default_priority`, and `default_tags` from config. Field 
 
 Do **not** default `scheduled` to the creation date. A task created "scheduled today" with no real intent to work on it today reads as stale the next day and clutters Today and Agenda views. When the user names neither a work-day nor a deadline, leave **both** empty - an unscheduled task is a valid, clean backlog state. Reach for `due` when there is a deadline, `scheduled` when there is a day you will actually pick it up, and often neither.
 
-**Plugin creation defaults.** When a task is created *through the plugin* - the GUI, natural-language input, note conversion, or the MCP/HTTP create path (not a raw filesystem write) - the plugin fills fields you omit from the vault's configured defaults. Depending on the user's settings this can include a **default project**, a default reminder, and a **default scheduled date**, and the plugin *ships* with the default scheduled date set to **Today**. So omitting `scheduled` does not reliably yield an unscheduled task (with the shipped default it lands scheduled for today), and omitting `projects` can silently attach the default project. Set the fields you mean explicitly, verify `projects` landed where intended, and treat an unscheduled task as a deliberate choice. The scheduled default is a per-user plugin setting the skill cannot change; `references/tasknotes-help.md` has the one-line fix.
+**Plugin creation defaults.** When a task is created *through the plugin* - the GUI, natural-language input, note conversion, or the MCP/HTTP create path (not a raw filesystem write) - the plugin fills fields you omit from the vault's configured defaults. Depending on the user's settings (Settings → TaskNotes → Task creation → Defaults) this can include a **default project**, a default reminder, and a **default scheduled date**, and the plugin *ships* with the default scheduled date set to **Today**. So omitting `scheduled` does not reliably yield an unscheduled task (with the shipped default it lands scheduled for today), and omitting `projects` can silently attach the default project. Supplying a project does not necessarily keep the defaults out either: unless the user has turned on **Use default projects only when no project is specified** (plugin v5, off by default), the default projects are added as well. Set the fields you mean explicitly, verify `projects` landed where intended, and treat an unscheduled task as a deliberate choice. The scheduled default is a per-user plugin setting the skill cannot change; `references/tasknotes-help.md` has the one-line fix.
 
 **Recurring tasks:**
 
@@ -293,7 +302,7 @@ The `projects:` map in `tasknotes-config.md` is the lookup table. Register a pro
 
 The Relationships Widget renders on any vault note. The **Subtasks (Kanban)** tab shows all tasks whose `projects:` field contains a wikilink to that note, grouped by status. Fully automatic - no per-note configuration.
 
-Settings: Settings → TaskNotes → Appearance → UI Elements → Relationships Widget (on/off and position).
+Settings: Settings → TaskNotes → Appearance & interaction → UI elements (the project subtasks widget toggle and its placement).
 
 ---
 
@@ -404,13 +413,15 @@ On MCP, configured TaskNotes user fields go through the `customProperties` argum
 3. Offer to write a done-tasks Bases view at `TaskNotes/Views/done-tasks.base`
 
 **Step 2: Guide archiving** (plugin handles this, not the skill)
-- Settings → TaskNotes → General → Move Archived Tasks to Folder: enable
+- Settings → TaskNotes → Task files → Task storage: enable moving archived tasks to a folder
 - Set destination to a subfolder of `tasks_folder` (e.g. `Tasks/Archive/`)
 - Archive via plugin GUI; the plugin adds `archived` tag and moves the file
 
 #### 9. Schema diagnostic (filesystem only)
 
 Run when a task search returns nothing for a known project, or a task is missing from views.
+
+**Plugin alternative (v5):** when mdbase type definitions are on (Settings → TaskNotes → TaskNotes App → Turn on type definitions; on by default for new installs, unchanged for vaults upgraded from 4.x), the user can run **TaskNotes: Check collection** from the command palette. It lists tasks that do not match the task type, such as a missing creation date or an unconfigured status, and offers backed-up repairs on confirmation. Suggest it to the user; keep the scan below as the fallback, and for the project-link checks it does not cover.
 
 Scan `tasks_folder` (direct files, exclude `Archive/`) for:
 
@@ -428,7 +439,7 @@ Report grouped by failure type. Offer to fix each; confirm before writing. Updat
 
 #### 10. Create a recurring task
 
-The skill writes the recurrence pattern; the plugin manages completed instances at runtime. Since v4.13.2, with "Create next after completion" enabled the plugin also creates the first available occurrence note, and occurrence notes link to their parent unambiguously across folders. Never close a recurring task by writing `status: done` (filesystem) or via `update_task` - that ends the entire series permanently. **For per-instance completion, when MCP or the HTTP API is available, use `tasknotes_complete_recurring_instance` (see Path: MCP) or `POST /api/tasks/:id/complete-instance`** - this completes one occurrence without closing the series. On a filesystem-only surface (Obsidian closed), per-instance completion is not possible; completions go through the plugin GUI.
+The skill writes the recurrence pattern; the plugin manages completed instances at runtime. Since v4.13.2, with "Create next after completion" enabled the plugin also creates the first available occurrence note, and occurrence notes link to their parent unambiguously across folders. Never close a recurring task by writing `status: done` (filesystem) or via `update_task` - that ends the entire series permanently. Since v5.0.2 the plugin labels that control **Series status** for this reason, and a series whose rule has `COUNT` or `UNTIL` completes itself once its last occurrence is completed or skipped, so it never needs closing by hand. **For per-instance completion, when MCP or the HTTP API is available, use `tasknotes_complete_recurring_instance` (see Path: MCP) or `POST /api/tasks/:id/complete-instance`** - this completes one occurrence without closing the series. On a filesystem-only surface (Obsidian closed), per-instance completion is not possible; completions go through the plugin GUI.
 
 1. Confirm recurrence pattern, anchor (`scheduled` or `completion`), and first occurrence date
 2. Build RRULE: `DTSTART:YYYYMMDD;FREQ=...`
@@ -441,7 +452,7 @@ The skill writes the recurrence pattern; the plugin manages completed instances 
    ```
 
 3. Write the task file with `recurrence`, `recurrence_anchor`, and `scheduled` set to the first occurrence
-4. For later per-instance completion: use `tasknotes_complete_recurring_instance` (MCP) or `POST /api/tasks/:id/complete-instance` (HTTP) when available; on a filesystem-only surface, completions go through the plugin GUI. (The HTTP endpoint honours a specific `date` only on plugin v4.13.8+; earlier versions ignored it and completed today's occurrence.)
+4. For later per-instance completion: use `tasknotes_complete_recurring_instance` (MCP) or `POST /api/tasks/:id/complete-instance` (HTTP) when available; on a filesystem-only surface, completions go through the plugin GUI. (The HTTP endpoint takes `date`, alias `instanceDate`; a malformed date returns `400` without completing anything. Before plugin v4.13.8 it ignored `date` and completed today's occurrence.)
 
 ---
 
@@ -464,6 +475,9 @@ Full reference: https://tasknotes.dev/views/
 7. Read before editing - never overwrite from stale context
 8. Unknown projects require a config update first
 9. Never edit plugin `.json` config files - Obsidian overwrites them silently on close, and since plugin v4.13.0 TaskNotes refuses to start when it cannot safely read its `data.json`, preserving the file for recovery rather than loading defaults
+10. Never edit mdbase metadata - `mdbase.yaml`, `_mdbase/` (or existing `_types/`, `_contracts/`, `_settings/` folders), or `.tasknotes/migrations/`. The plugin generates, upgrades and backs these up; hand edits can block its metadata upgrade or corrupt its backups
+11. Never change or remove an existing frontmatter `id` (plugin v5 stable task ID)
+12. Never call `tasknotes_delete_task` or `DELETE /api/tasks/{id}` - rule 1 applies on every surface
 
 ---
 

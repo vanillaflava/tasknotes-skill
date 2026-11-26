@@ -58,8 +58,8 @@ For time tracking, Pomodoro, calendar, and recurring task instance management wi
 
 **Required:**
 
-- **Obsidian** with the **TaskNotes plugin v4+** installed and enabled
-- **Bases** core plugin enabled (required by TaskNotes v4)
+- **Obsidian** with the **TaskNotes plugin v5** installed and enabled (TaskNotes v5 needs Obsidian 1.13.1 or newer). The skill defaults to v5; 4.x vaults are covered by notes in `references/tasknotes-help.md`.
+- **Bases** core plugin enabled (required by TaskNotes)
 - **An agent with filesystem access.** The skill reads and writes files on your local disk. How you get access depends on your platform:
   - **Claude Desktop** has no native filesystem access. Add a filesystem MCP - [Desktop Commander](https://github.com/wonderwhy-er/DesktopCommanderMCP) or the [official Anthropic filesystem MCP](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem), both installable via **Customize → Connectors**. When choosing, look for directory scoping, per-tool permissions, and shell access restrictions; these matter for security and privacy (see below). Desktop Commander has all three and is what this skill was built and tested with.
   - **Claude Co-Work and Claude Code** have filesystem access built in. No MCP required.
@@ -71,8 +71,8 @@ This skill has a hard dependency on [Obsidian](https://obsidian.md/) and the [Ta
 
 **Optional (unlocks MCP and HTTP API paths):**
 
-- **TaskNotes HTTP API:** enable in Settings → TaskNotes → Integrations → HTTP API. Adds reliable filtered queries, time tracking, Pomodoro, calendar events, and recurring task instance completion via REST calls to `127.0.0.1:8080`. As of plugin v4.13.0, requests must include a bearer token, read from Settings → TaskNotes → Integrations → HTTP API → **API authentication token** - see `references/tasknotes-help.md` for client configuration.
-- **TaskNotes MCP server:** enable in Settings → TaskNotes → Integrations → MCP Server (requires HTTP API toggle also on). Exposes 25 tools directly to the agent - the preferred path when Obsidian is running. As of plugin v4.13.0, connections must include the same bearer token (a TaskNotes token, not your AI provider's API key; to generate one, enable the HTTP API with the token field empty and restart Obsidian). See `references/tasknotes-help.md` in the skill for setup config and multi-platform instructions.
+- **TaskNotes HTTP API:** turn on **Enable HTTP API** in Settings → TaskNotes → Advanced → HTTP API. Adds reliable filtered queries, time tracking, Pomodoro, calendar events, and recurring task instance completion via REST calls to `127.0.0.1:8080`. As of plugin v4.13.0, requests must include a bearer token, read from Settings → TaskNotes → Advanced → HTTP API → **API authentication token**. Since v5 that token is stored per device in Obsidian Secret Storage, so each synced device has its own - see `references/tasknotes-help.md` for client configuration.
+- **TaskNotes MCP server:** turn on **Enable MCP server** on the same page (requires the HTTP API to be on). Exposes 25 tools directly to the agent - the preferred path when Obsidian is running. As of plugin v4.13.0, connections must include the same bearer token (a TaskNotes token, not your AI provider's API key; to generate one, enable the HTTP API with the token field empty and restart Obsidian). See `references/tasknotes-help.md` in the skill for setup config and multi-platform instructions.
 
 Both require Obsidian to be running. The skill falls back to filesystem access automatically if either is unavailable.
 
