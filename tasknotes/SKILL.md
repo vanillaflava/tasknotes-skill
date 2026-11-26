@@ -73,6 +73,8 @@ Check whether any loaded tool can read and write `.md` files. Do not assume a sp
 | Schema diagnostic | ✗ → Workflow 9 | ✗ → Workflow 9 | Workflow 9 (or the plugin's **TaskNotes: Check collection**) |
 | Time tracking | `tasknotes_*_time_tracking` | `/api/tasks/:id/time/*` | Manual (complex) |
 | Pomodoro | `tasknotes_*_pomodoro` | `/api/pomodoro/*` | Not supported |
+| Archive / unarchive | `tasknotes_toggle_archive` | `POST /api/tasks/:id/archive` | Not supported (GUI only) - Workflow 8 |
+| Delete task (after user confirms) | `tasknotes_delete_task` | `DELETE /api/tasks/:id` | Delete the .md file - Workflow 11 |
 | Works when Obsidian closed | ✗ | ✗ | ✓ |
 
 ---
@@ -93,7 +95,7 @@ The `tasknotes:` MCP tools are mostly self-describing - call them directly. Two 
 - `tasknotes_get_filter_options` - list available statuses, priorities, projects, contexts
 - `tasknotes_complete_recurring_instance` / `tasknotes_materialize_occurrence` - recurring tasks (see below)
 
-The server also exposes `tasknotes_delete_task`, `tasknotes_toggle_archive`, `tasknotes_create_task_from_text`, and stats, calendar-event, time-tracking and Pomodoro tools (25 in all on 5.0.5). Do not call `tasknotes_delete_task` - see Safety Rules.
+The server also exposes `tasknotes_delete_task`, `tasknotes_toggle_archive`, `tasknotes_create_task_from_text`, and stats, calendar-event, time-tracking and Pomodoro tools (25 in all on 5.0.5). `tasknotes_toggle_archive` archives a task (Workflow 8). `tasknotes_delete_task` permanently deletes the task file: call it only after the user has confirmed that specific deletion (Workflow 11).
 
 In deferred-tools environments, load a tool's schema before guessing its args: `tool_search("select:tasknotes_query_tasks")`.
 
@@ -154,7 +156,7 @@ Use when the HTTP API is available but MCP is not.
 | POST | `/api/tasks/{id}/materialize-occurrence` | Create or return the occurrence note for a date (body: `date`, required) |
 | GET | `/api/filter-options` | List valid statuses, priorities, projects |
 
-The `{id}` parameter is the URL-encoded vault-relative file path (e.g. `Agent%20Access%2FTaskNotes%2FTasks%2Ftask.md`), not the frontmatter `id`. `DELETE /api/tasks/{id}` also exists; do not use it (see Safety Rules). Time tracking, Pomodoro, calendar, webhook and NLP routes are listed in `references/tasknotes-help.md`.
+The `{id}` parameter is the URL-encoded vault-relative file path (e.g. `Agent%20Access%2FTaskNotes%2FTasks%2Ftask.md`), not the frontmatter `id`. `DELETE /api/tasks/{id}` permanently deletes the task file; use it only after the user confirms (Workflow 11). `POST /api/tasks/{id}/archive` is a toggle - see Workflow 8. Time tracking, Pomodoro, calendar, webhook and NLP routes are listed in `references/tasknotes-help.md`.
 
 **Schema diagnostic:** Not available via HTTP API. Switch to Filesystem path → Workflow 9.
 
@@ -342,9 +344,10 @@ Rule: inline checklists for steps within one task; separate files for work with 
 | Mark done | 4 | `status: done` + `completedDate: YYYY-MM-DD` |
 | List tasks for a project | 5 | Search by project wikilink |
 | Fix a GUI-created task | 6 | Adopt workflow |
-| Clean up done tasks | 8 | Housekeeping - guide user to plugin archive |
+| Clean up done tasks | 8 | Archive via MCP/HTTP (toggle - check `archived` first), or guide the user to the plugin |
 | Schema diagnostic | 9 | Scan for structural problems |
 | Recurring task | 10 | Write RRULE; never mark done via agent |
+| Delete a task | 11 | Only on explicit request; confirm title and path first |
 
 
 ### Workflows
@@ -378,7 +381,7 @@ Always read the file first. Use surgical edits. Always update `dateModified` alo
 3. Add `completedDate: YYYY-MM-DD`
 4. Update `dateModified`
 
-Never delete task files. Done tasks remain on disk; TaskNotes views filter by status.
+Completing is not deleting. Done tasks remain on disk; TaskNotes views filter by status. Delete only when the user asks for it (Workflow 11).
 
 #### 5. List tasks for a domain
 
@@ -412,10 +415,13 @@ On MCP, configured TaskNotes user fields go through the `customProperties` argum
 2. Present sorted by `completedDate` ascending with total count
 3. Offer to write a done-tasks Bases view at `TaskNotes/Views/done-tasks.base`
 
-**Step 2: Guide archiving** (plugin handles this, not the skill)
-- Settings → TaskNotes → Task files → Task storage: enable moving archived tasks to a folder
-- Set destination to a subfolder of `tasks_folder` (e.g. `Tasks/Archive/`)
-- Archive via plugin GUI; the plugin adds `archived` tag and moves the file
+**Step 2: Archive**
+
+Archiving hides a task from the default views without deleting it: the plugin adds the archive tag (`archived` by default) and, if archive moves are enabled, moves the file to the archive folder.
+
+- **MCP or HTTP API available:** after the user confirms which tasks to archive, call `tasknotes_toggle_archive` (`id` = task path) or `POST /api/tasks/{id}/archive` for each. Both are **toggles**: read the task first and skip any that already have `archived: true`, or you will unarchive them. If archive moves are enabled, the file's path changes, so re-read it by its new path before any further call.
+- **Filesystem only:** archiving is a plugin action; send the user to the plugin GUI. Do not hand-write the archive tag.
+- **Optional, for scan speed:** to keep archived files out of the main folder, the user can enable moving archived tasks to a folder under Settings → TaskNotes → Task files → Task storage, with a destination inside `tasks_folder` (e.g. `Tasks/Archive/`). That is a plugin setting the skill does not change.
 
 #### 9. Schema diagnostic (filesystem only)
 
@@ -454,6 +460,15 @@ The skill writes the recurrence pattern; the plugin manages completed instances 
 3. Write the task file with `recurrence`, `recurrence_anchor`, and `scheduled` set to the first occurrence
 4. For later per-instance completion: use `tasknotes_complete_recurring_instance` (MCP) or `POST /api/tasks/:id/complete-instance` (HTTP) when available; on a filesystem-only surface, completions go through the plugin GUI. (The HTTP endpoint takes `date`, alias `instanceDate`; a malformed date returns `400` without completing anything. Before plugin v4.13.8 it ignored `date` and completed today's occurrence.)
 
+#### 11. Delete a task
+
+Deletion is permanent: the MCP tool describes itself as "Permanently delete a task file", and an API or filesystem delete gets no Undo notice in Obsidian. So:
+
+1. Only delete when the user asks to delete (not "close", "finish" or "clean up" - those mean Workflow 4 or Workflow 8). If the intent is unclear, offer done or archive instead.
+2. Read the task, then confirm in chat, naming each task's title and vault path and saying it cannot be undone. Wait for an explicit yes. A yes covers the tasks you listed, nothing more.
+3. Delete with `tasknotes_delete_task` (`id` = path), `DELETE /api/tasks/{id}`, or, on the filesystem path, by deleting the `.md` file. For a recurring task, deleting the parent removes the whole series; to drop one occurrence, skip it in the plugin instead.
+4. Report what was deleted. Tasks that link to it via `projects:` or `blockedBy` keep the now-broken link; mention any you found.
+
 ---
 
 ### Creating Domain Views
@@ -466,7 +481,7 @@ Full reference: https://tasknotes.dev/views/
 
 ### Safety Rules
 
-1. Never delete task files - use `status: done` + `completedDate` instead
+1. Never delete a task without the user's explicit confirmation of that specific task in the conversation (Workflow 11). Finishing a task is `status: done` + `completedDate`; decluttering is archiving
 2. Never modify `dateCreated` - set once on creation, never changed
 3. Always update `dateModified` on every edit
 4. Always include `tags: [task]` - without it the task is invisible to all views
@@ -477,7 +492,6 @@ Full reference: https://tasknotes.dev/views/
 9. Never edit plugin `.json` config files - Obsidian overwrites them silently on close, and since plugin v4.13.0 TaskNotes refuses to start when it cannot safely read its `data.json`, preserving the file for recovery rather than loading defaults
 10. Never edit mdbase metadata - `mdbase.yaml`, `_mdbase/` (or existing `_types/`, `_contracts/`, `_settings/` folders), or `.tasknotes/migrations/`. The plugin generates, upgrades and backs these up; hand edits can block its metadata upgrade or corrupt its backups
 11. Never change or remove an existing frontmatter `id` (plugin v5 stable task ID)
-12. Never call `tasknotes_delete_task` or `DELETE /api/tasks/{id}` - rule 1 applies on every surface
 
 ---
 
@@ -494,7 +508,7 @@ Files in cloud-synced vaults may be zero-byte placeholders when not locally down
 - Schedule or manage reminders (runtime-only plugin behavior)
 - Convert inline Markdown checkboxes to tasks (GUI-only NLP workflow)
 - Validate status transitions against a configured custom workflow (writes status values directly)
-- Access event-driven archiving behavior (plugin-only at runtime)
+- Run the plugin's auto-archive (timed archiving of tasks in a status is runtime-only); archiving a named task is supported via MCP/HTTP
 
 **Environment-dependent capabilities:** Time tracking, Pomodoro, calendar events, and per-instance recurring task completion are available via MCP or HTTP API when those surfaces are present - but not via filesystem writes alone. What the skill can do depends on what the environment provides. See the surface lookup table in Step 0.
 

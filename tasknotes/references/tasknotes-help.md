@@ -201,9 +201,9 @@ Full docs: https://tasknotes.dev/HTTP_API/
 | POST | `/api/tasks` | Create a task |
 | GET | `/api/tasks/:id` | Get one task (frontmatter, plus body in `details`) by vault-relative path |
 | PUT | `/api/tasks/:id` | Update task with partial payload |
-| DELETE | `/api/tasks/:id` | Delete task file (the skill never uses this) |
+| DELETE | `/api/tasks/:id` | Permanently delete the task file (the skill asks the user first) |
 | POST | `/api/tasks/:id/toggle-status` | Cycle status through configured workflow |
-| POST | `/api/tasks/:id/archive` | Toggle archived state |
+| POST | `/api/tasks/:id/archive` | Toggle archived state (a toggle: check `archived` first) |
 | POST | `/api/tasks/:id/complete-instance` | Complete one instance of a recurring task |
 | POST | `/api/tasks/:id/materialize-occurrence` | Create or return the occurrence note for a date (idempotent) |
 | POST | `/api/tasks/query` | Advanced filtering with AND/OR logic, sorting, grouping |
