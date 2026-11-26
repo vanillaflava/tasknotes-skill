@@ -104,6 +104,7 @@ In deferred-tools environments, load a tool's schema before guessing its args: `
 - Required top-level: `conjunction` (`"and"` | `"or"`) and `children` (array). Optional: `sortKey`, `sortDirection` (`"asc"` | `"desc"`), `groupKey`.
 - Each child is a condition `{ "type": "condition", "id": "<any stable string>", "property": "<field>", "operator": "<op>", "value": <value> }` - the key is `property`, NOT `field`. Nested groups are allowed as children.
 - Common operators: `is`, `is-not`, `contains`, `does-not-contain`, `is-empty`, `is-not-empty` (hyphenated - `is-not`, not `is not`). Full list in `references/tasknotes-help.md`.
+- The MCP tool rejects a condition with no `value` key, even for operators that ignore it. For `is-checked` / `is-not-checked` pass `"value": true` (checked on 5.0.5). Done, unarchived tasks: `status.isCompleted` `is-checked` plus `archived` `is-not-checked`.
 - A query with an invalid `property`, an unknown operator, or an incomplete condition returns an **error** (`isError: true`, e.g. `Unknown property: ...`), not a silently empty result - so an empty result (`{"all":[]}`) means "nothing matched", not "malformed filter". (True since plugin v4.13.9; on older plugins the two were indistinguishable.) Custom fields accept `user:<id>`, `user.<id>`, `user:<frontmatter-key>` or `user.<frontmatter-key>`, not bare keys; `tasknotes_get_filter_options` lists them.
 
 ```json
@@ -419,7 +420,7 @@ On MCP, configured TaskNotes user fields go through the `customProperties` argum
 
 Archiving hides a task from the default views without deleting it: the plugin adds the archive tag (`archived` by default) and, if archive moves are enabled, moves the file to the archive folder.
 
-- **MCP or HTTP API available:** after the user confirms which tasks to archive, call `tasknotes_toggle_archive` (`id` = task path) or `POST /api/tasks/{id}/archive` for each. Both are **toggles**: read the task first and skip any that already have `archived: true`, or you will unarchive them. If archive moves are enabled, the file's path changes, so re-read it by its new path before any further call.
+- **MCP or HTTP API available:** after the user confirms which tasks to archive, call `tasknotes_toggle_archive` (`id` = task path) or `POST /api/tasks/{id}/archive` for each. Both are **toggles**: check each task's `archived` field first (returned by `get_task` and `query_tasks`; on disk it is the archive tag in `tags:`) and skip any already archived, or you will unarchive them. If archive moves are enabled, the file moves (e.g. to `Tasks/Archive/`) and the response carries the new `path`; use that for any further call. (Checked on 5.0.5: the tag is added, `dateModified` updated, and the file moved.)
 - **Filesystem only:** archiving is a plugin action; send the user to the plugin GUI. Do not hand-write the archive tag.
 - **Optional, for scan speed:** to keep archived files out of the main folder, the user can enable moving archived tasks to a folder under Settings → TaskNotes → Task files → Task storage, with a destination inside `tasks_folder` (e.g. `Tasks/Archive/`). That is a plugin setting the skill does not change.
 
