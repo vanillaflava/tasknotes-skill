@@ -61,7 +61,7 @@ For time tracking, Pomodoro, calendar, and recurring task instance management wi
 - **Obsidian** with the **TaskNotes plugin v5** installed and enabled (TaskNotes v5 needs Obsidian 1.13.1 or newer). The skill defaults to v5; 4.x vaults are covered by notes in `references/tasknotes-help.md`.
 - **Bases** core plugin enabled (required by TaskNotes)
 - **An agent with filesystem access.** The skill reads and writes files on your local disk. How you get access depends on your platform:
-  - **Claude Desktop** has no native filesystem access. Add a filesystem MCP - [Desktop Commander](https://github.com/wonderwhy-er/DesktopCommanderMCP) or the [official Anthropic filesystem MCP](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem), both installable via **Customize → Connectors**. When choosing, look for directory scoping, per-tool permissions, and shell access restrictions; these matter for security and privacy (see below). Desktop Commander has all three and is what this skill was built and tested with.
+  - **Claude Desktop** has no native filesystem access. Add a filesystem MCP - [Desktop Commander](https://github.com/wonderwhy-er/DesktopCommanderMCP) or the [official Anthropic filesystem MCP](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem), both installable via **Plugins → Connectors** (formerly Customize → Connectors). When choosing, look for directory scoping, per-tool permissions, and shell access restrictions; these matter for security and privacy (see below). Desktop Commander has all three and is what this skill was built and tested with.
   - **Claude Co-Work and Claude Code** have filesystem access built in. No MCP required.
   - **Gemini CLI, OpenAI Codex CLI, and GitHub Copilot** also have native filesystem access.
   - **Claude.ai web** has no filesystem access and is not supported.
@@ -80,7 +80,9 @@ Both require Obsidian to be running. The skill falls back to filesystem access a
 
 ### Claude Desktop
 
-Download [**tasknotes.skill**](https://github.com/vanillaflava/tasknotes-skill/releases/latest/download/tasknotes.skill) and upload it under **Customize → Skills**.
+Download [**tasknotes.skill**](https://github.com/vanillaflava/tasknotes-skill/releases/latest/download/tasknotes.skill) and add it under **Plugins → Add** (this page used to be called Customize). Claude detects that the file is a skill.
+
+**Updating:** download the new release and add it the same way. Claude notices that an earlier version is installed and asks whether to update it. Until you do, your agent keeps the old guidance. Claude Code picks up the update the next time it starts.
 
 The skill activates automatically for task-related conversational requests or via `/tasknotes`.
 
